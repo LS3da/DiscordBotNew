@@ -30,4 +30,4 @@ jobs:
       - name: Run bot
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-        run: python createst.py
+        run: python -u createst.py
