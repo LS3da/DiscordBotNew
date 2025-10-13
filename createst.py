@@ -25,26 +25,27 @@ try:
     with open("text.txt", encoding="utf-8") as f:
         text = f.read()
 
-    # ======================= ここからが最後の修正箇所です =======================
-
-    # 1. 元のテキストを改行で文ごとにリスト化する
+    # 元のテキストを改行で文ごとにリスト化する
     lines = text.split('\n')
 
-    # 2. それぞれの文を分かち書きし、スペースで連結したリストを作成する
+    # それぞれの文を分かち書きし、スペースで連結したリストを作成する
     tokenized_sentences = []
     for line in lines:
-        # 空行は学習データに含めないようにする
-        if line:
+        if line: # 空行は学習データに含めない
             tokenized_sentences.append(" ".join(japanese_tokenizer(line)))
 
-    # 3. 分かち書き済みの文のリストを、再び改行で連結して一つのテキストに戻す
-    #    これにより、markovifyが文の区切りを認識できるようになる
+    # 分かち書き済みの文のリストを、再び改行で連結して一つのテキストに戻す
     processed_text = "\n".join(tokenized_sentences)
 
-    # 4. 適切に処理されたテキストを渡してモデルを生成する (state_size=2のまま)
-    text_model = markovify.Text(processed_text, state_size=2)
 
-    # ======================= ここまでが最後の修正箇所です =======================
+    # ======================= ここが最後の修正箇所です =======================
+    #
+    # markovifyの厳格な内部チェックを緩和するため `well_formed=False` を追加。
+    # これにより、データ量が少ない場合に発生するエラーを回避します。
+    text_model = markovify.Text(processed_text, state_size=2, well_formed=False)
+    #
+    # =====================================================================
+
 
     print("マルコフモデルの構築に成功しました。")
     MODEL_READY = True
@@ -104,4 +105,3 @@ async def createstsaymessage(ctx, *, message: str):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
-
