@@ -25,15 +25,26 @@ try:
     with open("text.txt", encoding="utf-8") as f:
         text = f.read()
 
-    # Janomeを使ってテキスト全体を単語ごとに区切り、スペースで連結する
-    tokenized_text = " ".join(japanese_tokenizer(text))
+    # ======================= ここからが最後の修正箇所です =======================
 
-    # ======================= ここが今回の修正箇所です =======================
-    #
-    # state_sizeを 1 から 2 に変更して、より精度の高いモデルを構築する
-    text_model = markovify.Text(tokenized_text, state_size=2)
-    #
-    # =====================================================================
+    # 1. 元のテキストを改行で文ごとにリスト化する
+    lines = text.split('\n')
+
+    # 2. それぞれの文を分かち書きし、スペースで連結したリストを作成する
+    tokenized_sentences = []
+    for line in lines:
+        # 空行は学習データに含めないようにする
+        if line:
+            tokenized_sentences.append(" ".join(japanese_tokenizer(line)))
+
+    # 3. 分かち書き済みの文のリストを、再び改行で連結して一つのテキストに戻す
+    #    これにより、markovifyが文の区切りを認識できるようになる
+    processed_text = "\n".join(tokenized_sentences)
+
+    # 4. 適切に処理されたテキストを渡してモデルを生成する (state_size=2のまま)
+    text_model = markovify.Text(processed_text, state_size=2)
+
+    # ======================= ここまでが最後の修正箇所です =======================
 
     print("マルコフモデルの構築に成功しました。")
     MODEL_READY = True
@@ -92,4 +103,4 @@ async def createstsaymessage(ctx, *, message: str):
     await ctx.send(message)
 
 # Botの起動
-bot.run(os.environ['DISCORD_BOT_TOKEN'])
+bot.run(os.environ['DISCORD_BOT_TOKEN'])```
