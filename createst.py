@@ -37,15 +37,8 @@ try:
     # 分かち書き済みの文のリストを、再び改行で連結して一つのテキストに戻す
     processed_text = "\n".join(tokenized_sentences)
 
-
-    # ======================= ここが最後の修正箇所です =======================
-    #
-    # markovifyの厳格な内部チェックを緩和するため `well_formed=False` を追加。
-    # これにより、データ量が少ない場合に発生するエラーを回避します。
+    # markovifyの厳格な内部チェックを緩和するため `well_formed=False` を追加
     text_model = markovify.Text(processed_text, state_size=2, well_formed=False)
-    #
-    # =====================================================================
-
 
     print("マルコフモデルの構築に成功しました。")
     MODEL_READY = True
@@ -62,7 +55,7 @@ except Exception as e:
 async def on_ready():
     print(f'Login OK: {bot.user} (ID: {bot.user.id})')
 
-# !marukofuコマンド
+# !marukofuコマンド（通常の長さの文章を生成）
 @bot.command()
 async def marukofu(ctx):
     try:
@@ -74,12 +67,39 @@ async def marukofu(ctx):
         await ctx.send("ごめんなさい、現在学習モデルの準備ができていないため、文章を生成できません。")
         return
 
-    sentence = text_model.make_sentence(tries=100, max_chars=100)
+    # 通常の文章を生成（最大140文字）
+    sentence = text_model.make_sentence(tries=100, max_chars=140)
     
     if sentence:
         await ctx.send(sentence.replace(" ", ""))
     else:
         await ctx.send("ごめんなさい、学習データに基づいて文章をうまく生成できませんでした。")
+
+
+# ======================= ここからが追加したコマンドです =======================
+
+# !marukofushortコマンド（短い文章を生成）
+@bot.command()
+async def marukofushort(ctx):
+    try:
+        await ctx.message.delete()
+    except (discord.errors.NotFound, discord.errors.Forbidden):
+        pass
+    
+    if not MODEL_READY:
+        await ctx.send("ごめんなさい、現在学習モデルの準備ができていないため、文章を生成できません。")
+        return
+
+    # 短い文章を生成（最大70文字）
+    # 💡 make_sentence -> make_short_sentence に変更
+    sentence = text_model.make_short_sentence(tries=100, max_chars=70)
+    
+    if sentence:
+        await ctx.send(sentence.replace(" ", ""))
+    else:
+        await ctx.send("ごめんなさい、学習データに基づいて短い文章をうまく生成できませんでした。")
+
+# ======================= ここまでが追加したコマンドです =======================
 
 
 # !omikujiコマンド
