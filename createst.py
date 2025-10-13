@@ -25,21 +25,13 @@ try:
     with open("text.txt", encoding="utf-8") as f:
         text = f.read()
 
-    # 元のテキストを改行で文ごとにリスト化する
     lines = text.split('\n')
-
-    # それぞれの文を分かち書きし、スペースで連結したリストを作成する
     tokenized_sentences = []
     for line in lines:
-        if line: # 空行は学習データに含めない
+        if line:
             tokenized_sentences.append(" ".join(japanese_tokenizer(line)))
-
-    # 分かち書き済みの文のリストを、再び改行で連結して一つのテキストに戻す
     processed_text = "\n".join(tokenized_sentences)
-
-    # markovifyの厳格な内部チェックを緩和するため `well_formed=False` を追加
     text_model = markovify.Text(processed_text, state_size=2, well_formed=False)
-
     print("マルコフモデルの構築に成功しました。")
     MODEL_READY = True
 except FileNotFoundError:
@@ -67,7 +59,6 @@ async def marukofu(ctx):
         await ctx.send("ごめんなさい、現在学習モデルの準備ができていないため、文章を生成できません。")
         return
 
-    # 通常の文章を生成（最大140文字）
     sentence = text_model.make_sentence(tries=100, max_chars=140)
     
     if sentence:
@@ -75,8 +66,6 @@ async def marukofu(ctx):
     else:
         await ctx.send("ごめんなさい、学習データに基づいて文章をうまく生成できませんでした。")
 
-
-# ======================= ここからが追加したコマンドです =======================
 
 # !marukofushortコマンド（短い文章を生成）
 @bot.command()
@@ -90,16 +79,37 @@ async def marukofushort(ctx):
         await ctx.send("ごめんなさい、現在学習モデルの準備ができていないため、文章を生成できません。")
         return
 
-    # 短い文章を生成（最大70文字）
-    # 💡 make_sentence -> make_short_sentence に変更
-    sentence = text_model.make_short_sentence(tries=100, max_chars=70)
+    # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ ここからロジックを大幅に変更 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+
+    # 💡 1. まずは普通の文章を生成してみる（文字数制限は緩め）
+    long_sentence = text_model.make_sentence(tries=100, max_chars=140)
+    
+    sentence = None # 最終的に送信する文章を入れる変数
+    if long_sentence:
+        # 💡 2. 生成した文章を「。」や「、」で短く加工する
+        clean_sentence = long_sentence.replace(" ", "") # 先にスペースを削除
+        
+        # 最初の「。」を探す
+        kuten_index = clean_sentence.find("。")
+        if kuten_index != -1:
+            # 「。」が見つかれば、そこまでを文章とする
+            sentence = clean_sentence[:kuten_index + 1]
+        else:
+            # 「。」がなければ、最初の「、」を探す
+            touten_index = clean_sentence.find("、")
+            if touten_index != -1:
+                # 「、」が見つかれば、そこまでを文章とする
+                sentence = clean_sentence[:touten_index + 1]
+            else:
+                # 「。」も「、」もなければ、そのまま使う
+                sentence = clean_sentence
+
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ここまでロジックを大幅に変更 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
     
     if sentence:
-        await ctx.send(sentence.replace(" ", ""))
+        await ctx.send(sentence) # すでにスペースは削除済みなのでそのまま送信
     else:
         await ctx.send("ごめんなさい、学習データに基づいて短い文章をうまく生成できませんでした。")
-
-# ======================= ここまでが追加したコマンドです =======================
 
 
 # !omikujiコマンド
