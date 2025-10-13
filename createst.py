@@ -28,7 +28,7 @@ try:
 
     # マルコフモデルを生成
     # 🚨 tokenizer=japanese_tokenizer を追加して日本語に対応させる 🚨
-    text_model = markovify.Text(text, state_size=2, tokenizer=japanese_tokenizer)
+    text_model = markovify.Text(text, state_size=1, tokenizer=japanese_tokenizer)
     print("マルコフモデルの構築に成功しました。")
     MODEL_READY = True
 except FileNotFoundError:
@@ -106,3 +106,4 @@ async def createstsaymessage(ctx, *, message: str):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
