@@ -1,0 +1,33 @@
+name: Run Discord Bot
+
+on:
+  push:
+    branches: [ main ] # mainブランチにプッシュされた時に実行
+  workflow_dispatch: # 手動でも実行できるようにする
+  schedule:
+    # 🚨 5時間ごとの実行 (00分に起動)
+    - cron: '0 */5 * * *'
+    # 🚨 6時間ごとの実行 (30分に起動)
+    - cron: '30 */6 * * *'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+        run: python createst.py
