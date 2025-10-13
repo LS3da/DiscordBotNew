@@ -26,9 +26,18 @@ try:
     with open("text.txt", encoding="utf-8") as f:
         text = f.read()
 
-    # マルコフモデルを生成
-    # 🚨 tokenizer=japanese_tokenizer を追加して日本語に対応させる 🚨
-    text_model = markovify.Text(text, state_size=1, tokenizer=japanese_tokenizer)
+    # ======================= ここからが修正箇所です =======================
+
+    # 1. Janomeを使ってテキスト全体を単語ごとに区切り、スペースで連結する
+    #    例：「今日は晴れです」 -> "今日 は 晴れ です"
+    tokenized_text = " ".join(japanese_tokenizer(text))
+
+    # 2. スペースで区切られたテキストをmarkovifyに渡してモデルを生成する
+    #    エラーの原因だった`tokenizer=...`の引数を削除
+    text_model = markovify.Text(tokenized_text, state_size=1)
+    
+    # ======================= ここまでが修正箇所です =======================
+
     print("マルコフモデルの構築に成功しました。")
     MODEL_READY = True
 except FileNotFoundError:
@@ -62,10 +71,12 @@ async def marukofu(ctx):
         return
 
     # 新しい文章を生成（最大100文字、100回試行）
+    # 💡 .replace(" ", "") を追加して、生成された文章のスペースを削除
     sentence = text_model.make_sentence(tries=100, max_chars=100)
     
     if sentence:
-        await ctx.send(sentence)
+        # 生成された文章は "単語 単語 単語" のようになっているので、スペースを削除して自然な日本語にする
+        await ctx.send(sentence.replace(" ", ""))
     else:
         await ctx.send("ごめんなさい、学習データに基づいて文章をうまく生成できませんでした。")
 
@@ -106,4 +117,3 @@ async def createstsaymessage(ctx, *, message: str):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
-
