@@ -1,8 +1,9 @@
 import discord
 import os
 import random
-import markovify # 👈 markovify ライブラリをインポート
+import markovify
 from discord.ext import commands
+from janome.tokenizer import Tokenizer # 👈 日本語対応のために Janome をインポート
 
 # コマンド機能を使うBotを定義
 bot = commands.Bot(
@@ -13,19 +14,28 @@ bot = commands.Bot(
 # ----------------------------------------------------
 # 1. 学習済みモデルの準備 (Bot起動時に一度だけ実行)
 # ----------------------------------------------------
+# Janomeの準備
+t = Tokenizer()
+
+# トークナイザー関数を定義（markovifyに渡すための分かち書き関数）
+def japanese_tokenizer(text):
+    # Janomeで形態素解析を行い、単語をリストにして返す
+    return t.tokenize(text, wakati=True)
+
 try:
     with open("text.txt", encoding="utf-8") as f:
         text = f.read()
 
     # マルコフモデルを生成
-    # state_size=2 は「2単語前までの情報」を使って次の単語を予測
-    text_model = markovify.Text(text, state_size=2)
+    # 🚨 tokenizer=japanese_tokenizer を追加して日本語に対応させる 🚨
+    text_model = markovify.Text(text, state_size=2, tokenizer=japanese_tokenizer)
     print("マルコフモデルの構築に成功しました。")
     MODEL_READY = True
 except FileNotFoundError:
     print("学習データ 'text.txt' が見つかりません。マルコフコマンドは使用できません。")
     MODEL_READY = False
 except Exception as e:
+    # 構築失敗の原因を特定しやすくするために、エラー内容を具体的に出力
     print(f"マルコフモデルの構築中にエラーが発生しました: {e}")
     MODEL_READY = False
 # ----------------------------------------------------
@@ -40,7 +50,11 @@ async def on_ready():
 # !marukofuコマンド：マルコフ連鎖で文章を生成 (新しい機能)
 @bot.command()
 async def marukofu(ctx):
-    await ctx.message.delete()
+    # 削除失敗エラーを無視する処理（NotFound/Forbidden対応）
+    try:
+        await ctx.message.delete()
+    except (discord.errors.NotFound, discord.errors.Forbidden):
+        pass
     
     # モデルが正常に構築されていない場合はエラーメッセージを送信して終了
     if not MODEL_READY:
@@ -59,7 +73,10 @@ async def marukofu(ctx):
 # !omikujiコマンド：おみくじを引く
 @bot.command()
 async def omikuji(ctx):
-    await ctx.message.delete()
+    try:
+        await ctx.message.delete()
+    except (discord.errors.NotFound, discord.errors.Forbidden):
+        pass
     # おみくじの結果のリストを定義
     results = [
         "大吉 🥳",
@@ -81,7 +98,10 @@ async def omikuji(ctx):
 # !createstsaymessageコマンド：ユーザーが入力した内容をそのままBotが送信
 @bot.command()
 async def createstsaymessage(ctx, *, message: str):
-    await ctx.message.delete()
+    try:
+        await ctx.message.delete()
+    except (discord.errors.NotFound, discord.errors.Forbidden):
+        pass
     await ctx.send(message)
 
 # Botの起動
