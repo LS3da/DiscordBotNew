@@ -4,37 +4,25 @@ import random
 import markovify
 from discord.ext import commands
 from janome.tokenizer import Tokenizer
-import google.generativeai as genai # ◀️ Gemini APIライブラリをインポート
+import google.generativeai as genai
 
-# コマンド機能を使うBotを定義
-bot = commands.Bot(
-    command_prefix='!',
-    intents=discord.Intents.all()
-)
+bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
-# ======================= Gemini APIの準備 =======================
-# 1. GitHub SecretsからAPIキーを読み込む
+# (省略... Geminiとマルコフの準備部分は変更なし)
+# ...
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-GEMINI_READY = False # Geminiが使えるかどうかの目印
-
+GEMINI_READY = False
 if GEMINI_API_KEY:
     try:
-        # 2. APIキーを設定
         genai.configure(api_key=GEMINI_API_KEY)
-        # 3. 使用するモデルを準備
-        gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+        gemini_model = genai.GenerativeModel('gemini-1.5-flash-latest') # ◀️ あなたが発見した最新モデル名
         print("Geminiモデルの準備に成功しました。")
         GEMINI_READY = True
     except Exception as e:
         print(f"Geminiモデルの準備中にエラーが発生しました: {e}")
 else:
     print("環境変数 'GEMINI_API_KEY' が見つかりません。Geminiコマンドは使用できません。")
-# ================================================================
 
-# ----------------------------------------------------
-# マルコフ連鎖モデルの準備
-# ----------------------------------------------------
-# (ここは以前のコードと全く同じです)
 t = Tokenizer()
 def japanese_tokenizer(text):
     return t.tokenize(text, wakati=True)
@@ -52,47 +40,37 @@ try:
 except Exception as e:
     print(f"マルコフモデルの構築中にエラーが発生しました: {e}")
     MODEL_READY = False
-# ----------------------------------------------------
+# ...
 
 @bot.event
 async def on_ready():
     print(f'Login OK: {bot.user} (ID: {bot.user.id})')
 
-# ======================= ここからが追加したコマンドです =======================
-
-# !geminiコマンド：Gemini APIに質問して応答を生成
+# !geminiコマンド
 @bot.command()
-async def gemini(ctx, *, prompt: str): # ◀️ `*`をつけることで、スペースを含む文章を全て受け取れる
+async def gemini(ctx, *, prompt: str):
     try:
         await ctx.message.delete()
     except (discord.errors.NotFound, discord.errors.Forbidden):
         pass
-
-    # Geminiが準備できていない場合はエラーメッセージを送信
     if not GEMINI_READY:
         await ctx.send("ごめんなさい、現在AIモデルの準備ができていないため、お答えできません。")
         return
-
-    # 「考え中...」という表示を出す
     async with ctx.typing():
         try:
-            # Gemini APIにプロンプトを送信して、応答を生成
             response = gemini_model.generate_content(prompt)
-            # 応答のテキスト部分を送信
             await ctx.send(response.text)
         except Exception as e:
-            # APIでエラーが起きた場合
             print(f"Gemini APIエラー: {e}")
             await ctx.send(f"ごめんなさい、AIモデルとの通信中にエラーが発生しました。\n`{e}`")
-
-# ============================================================================
-
-# --- ここから下は、既存のマルコフコマンドなどです ---
 
 # !marukofuコマンド
 @bot.command()
 async def marukofu(ctx):
-    # (省略... 変更なし)
+    try: # ◀️ 消えてしまっていたメッセージ削除処理を復活させました！
+        await ctx.message.delete()
+    except (discord.errors.NotFound, discord.errors.Forbidden):
+        pass
     if not MODEL_READY:
         await ctx.send("ごめんなさい、現在学習モデルの準備ができていないため、文章を生成できません。")
         return
@@ -102,11 +80,13 @@ async def marukofu(ctx):
     else:
         await ctx.send("ごめんなさい、学習データに基づいて文章をうまく生成できませんでした。")
 
-
 # !marukofushortコマンド
 @bot.command()
 async def marukofushort(ctx):
-    # (省略... 変更なし)
+    try: # ◀️ 消えてしまっていたメッセージ削除処理を復活させました！
+        await ctx.message.delete()
+    except (discord.errors.NotFound, discord.errors.Forbidden):
+        pass
     if not MODEL_READY:
         await ctx.send("ごめんなさい、現在学習モデルの準備ができていないため、文章を生成できません。")
         return
@@ -128,11 +108,13 @@ async def marukofushort(ctx):
     else:
         await ctx.send("ごめんなさい、学習データに基づいて短い文章をうまく生成できませんでした。")
 
-
 # !marukofulongコマンド
 @bot.command()
 async def marukofulong(ctx):
-    # (省略... 変更なし)
+    try: # ◀️ 消えてしまっていたメッセージ削除処理を復活させました！
+        await ctx.message.delete()
+    except (discord.errors.NotFound, discord.errors.Forbidden):
+        pass
     if not MODEL_READY:
         await ctx.send("ごめんなさい、現在学習モデルの準備ができていないため、文章を生成できません。")
         return
@@ -144,24 +126,25 @@ async def marukofulong(ctx):
     else:
         await ctx.send("ごめんなさい、学習データに基づいて長い文章をうまく生成できませんでした。")
 
-
 # !omikujiコマンド
 @bot.command()
 async def omikuji(ctx):
-    # (省略... 変更なし)
+    try: # ◀️ 消えてしまっていたメッセージ削除処理を復活させました！
+        await ctx.message.delete()
+    except (discord.errors.NotFound, discord.errors.Forbidden):
+        pass
     results = ["大吉 🥳", "中吉 😊", "小吉 🙂", "吉 😉", "末吉 😐", "凶 😟", "大凶 😭"]
     fortune = random.choice(results)
     await ctx.send(f'{ctx.author.display_name} さんの今日の運勢は... **{fortune}** です！')
 
-
 # !createstsaymessageコマンド
 @bot.command()
 async def createstsaymessage(ctx, *, message: str):
-    # (省略... 変更なし)
+    try: # ◀️ 消えてしまっていたメッセージ削除処理を復活させました！
+        await ctx.message.delete()
+    except (discord.errors.NotFound, discord.errors.Forbidden):
+        pass
     await ctx.send(message)
-
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
-
-
