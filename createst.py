@@ -22,7 +22,7 @@ if GEMINI_API_KEY:
         # 2. APIキーを設定
         genai.configure(api_key=GEMINI_API_KEY)
         # 3. 使用するモデルを準備
-        gemini_model = genai.GenerativeModel('gemini-2.5-flash-latest')
+        gemini_model = genai.GenerativeModel('gemini-2.5-flash')
         print("Geminiモデルの準備に成功しました。")
         GEMINI_READY = True
     except Exception as e:
@@ -163,4 +163,5 @@ async def createstsaymessage(ctx, *, message: str):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
