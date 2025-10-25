@@ -8,25 +8,28 @@ import google.generativeai as genai
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
-# (省略... Geminiとマルコフの準備部分は変更なし)
-# ...
+# ======================= Gemini APIの準備 =======================
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 GEMINI_READY = False
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        gemini_model = genai.GenerativeModel('gemini-flash-latest') # ◀️ あなたが発見した最新モデル名
+        # 💡 あなたが見つけたモデル名に敬意を表して `gemini-1.5-flash-latest` を使わせていただきます
+        gemini_model = genai.GenerativeModel('gemini-1.5-flash-latest')
         print("Geminiモデルの準備に成功しました。")
         GEMINI_READY = True
     except Exception as e:
         print(f"Geminiモデルの準備中にエラーが発生しました: {e}")
 else:
     print("環境変数 'GEMINI_API_KEY' が見つかりません。Geminiコマンドは使用できません。")
+# ================================================================
 
-t = Tokenizer()
-def japanese_tokenizer(text):
-    return t.tokenize(text, wakati=True)
+# ======================= マルコフ連鎖モデルの準備 =======================
+MODEL_READY = False
 try:
+    t = Tokenizer()
+    def japanese_tokenizer(text):
+        return t.tokenize(text, wakati=True)
     with open("text.txt", encoding="utf-8") as f:
         text = f.read()
     lines = text.split('\n')
@@ -39,8 +42,7 @@ try:
     MODEL_READY = True
 except Exception as e:
     print(f"マルコフモデルの構築中にエラーが発生しました: {e}")
-    MODEL_READY = False
-# ...
+# =====================================================================
 
 @bot.event
 async def on_ready():
@@ -64,10 +66,55 @@ async def gemini(ctx, *, prompt: str):
             print(f"Gemini APIエラー: {e}")
             await ctx.send(f"ごめんなさい、AIモデルとの通信中にエラーが発生しました。\n`{e}`")
 
+
+# ======================= ここからが追加したコマンドです =======================
+
+# !thinkコマンド：ステップ・バイ・ステップで推論させる
+@bot.command()
+async def think(ctx, *, prompt: str):
+    try:
+        await ctx.message.delete()
+    except (discord.errors.NotFound, discord.errors.Forbidden):
+        pass
+        
+    if not GEMINI_READY:
+        await ctx.send("ごめんなさい、現在AIモデルの準備ができていないため、思考することができません。")
+        return
+
+    # ユーザーへの応答メッセージを少し変更
+    await ctx.send(f"テーマ：`{prompt}`\n\nこのテーマについて、深く考えています… 🤔")
+    async with ctx.typing():
+        try:
+            # 魔法の呪文（プロンプトテンプレート）を用意
+            thinking_prompt = f"""以下の問いに対して、ステップ・バイ・ステップで深く考察し、その思考プロセスと最終的な結論を日本語で記述してください。
+
+### 問い
+{prompt}
+
+### 思考プロセス
+1. 問いの主要なキーワードを特定し、分解する。
+2. 
+""" # ◀️ 思考のヒントを少し与えることで、より構造化された回答を促す
+
+            response = gemini_model.generate_content(thinking_prompt)
+            
+            # Discordの文字数制限(2000文字)を超えないように、出力を最初の1950文字に制限
+            if len(response.text) > 1950:
+                await ctx.send(response.text[:1950] + "\n...(文字数制限のため、以下省略)...")
+            else:
+                await ctx.send(response.text)
+                
+        except Exception as e:
+            print(f"Thinkコマンドエラー: {e}")
+            await ctx.send(f"ごめんなさい、思考中にエラーが発生しました。\n`{e}`")
+
+# ============================================================================
+
+
 # !marukofuコマンド
 @bot.command()
 async def marukofu(ctx):
-    try: # ◀️ 消えてしまっていたメッセージ削除処理を復活させました！
+    try:
         await ctx.message.delete()
     except (discord.errors.NotFound, discord.errors.Forbidden):
         pass
@@ -83,7 +130,7 @@ async def marukofu(ctx):
 # !marukofushortコマンド
 @bot.command()
 async def marukofushort(ctx):
-    try: # ◀️ 消えてしまっていたメッセージ削除処理を復活させました！
+    try:
         await ctx.message.delete()
     except (discord.errors.NotFound, discord.errors.Forbidden):
         pass
@@ -111,7 +158,7 @@ async def marukofushort(ctx):
 # !marukofulongコマンド
 @bot.command()
 async def marukofulong(ctx):
-    try: # ◀️ 消えてしまっていたメッセージ削除処理を復活させました！
+    try:
         await ctx.message.delete()
     except (discord.errors.NotFound, discord.errors.Forbidden):
         pass
@@ -129,7 +176,7 @@ async def marukofulong(ctx):
 # !omikujiコマンド
 @bot.command()
 async def omikuji(ctx):
-    try: # ◀️ 消えてしまっていたメッセージ削除処理を復活させました！
+    try:
         await ctx.message.delete()
     except (discord.errors.NotFound, discord.errors.Forbidden):
         pass
@@ -140,7 +187,7 @@ async def omikuji(ctx):
 # !createstsaymessageコマンド
 @bot.command()
 async def createstsaymessage(ctx, *, message: str):
-    try: # ◀️ 消えてしまっていたメッセージ削除処理を復活させました！
+    try:
         await ctx.message.delete()
     except (discord.errors.NotFound, discord.errors.Forbidden):
         pass
@@ -148,5 +195,3 @@ async def createstsaymessage(ctx, *, message: str):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
-
-
