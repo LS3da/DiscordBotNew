@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands # ◀️ スラッシュコマンドの魔法をインポート
 import os
 import random
 import markovify
@@ -6,6 +7,7 @@ from discord.ext import commands
 from janome.tokenizer import Tokenizer
 import google.generativeai as genai
 
+# Botの定義は変更なし
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
 # ======================= Gemini APIの準備 =======================
@@ -14,7 +16,6 @@ GEMINI_READY = False
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        # 💡 あなたが見つけたモデル名に敬意を表して `gemini-1.5-flash-latest` を使わせていただきます
         gemini_model = genai.GenerativeModel('gemini-flash-latest')
         print("Geminiモデルの準備に成功しました。")
         GEMINI_READY = True
@@ -47,69 +48,72 @@ except Exception as e:
 @bot.event
 async def on_ready():
     print(f'Login OK: {bot.user} (ID: {bot.user.id})')
-
-# !geminiコマンド
-@bot.command()
-async def gemini(ctx, *, prompt: str):
+    # 💡 Botが起動したときに、スラッシュコマンドをDiscordに同期させる
     try:
-        await ctx.message.delete()
-    except (discord.errors.NotFound, discord.errors.Forbidden):
-        pass
+        synced = await bot.tree.sync()
+        print(f"{len(synced)}個のスラッシュコマンドを同期しました。")
+    except Exception as e:
+        print(f"スラッシュコマンドの同期に失敗しました: {e}")
+
+# ======================= ここからがスラッシュコマンドです =======================
+
+# /geminiコマンド
+@bot.tree.command(name="gemini", description="賢者に質問します。")
+@app_commands.describe(prompt="質問したい内容を入力してください。")
+async def gemini_slash(interaction: discord.Interaction, prompt: str):
     if not GEMINI_READY:
-        await ctx.send("ごめんなさい、現在AIモデルの準備ができていないため、お答えできません。")
-        return
-    async with ctx.typing():
-        try:
-            response = gemini_model.generate_content(prompt)
-            await ctx.send(response.text)
-        except Exception as e:
-            print(f"Gemini APIエラー: {e}")
-            await ctx.send(f"ごめんなさい、AIモデルとの通信中にエラーが発生しました。\n`{e}`")
-
-
-# ======================= ここからが追加したコマンドです =======================
-
-# !thinkコマンド：ステップ・バイ・ステップで推論させる
-@bot.command()
-async def think(ctx, *, prompt: str):
-    try:
-        await ctx.message.delete()
-    except (discord.errors.NotFound, discord.errors.Forbidden):
-        pass
-        
-    if not GEMINI_READY:
-        await ctx.send("ごめんなさい、現在AIモデルの準備ができていないため、思考することができません。")
+        # ephemeral=True で、コマンド実行者にだけ見える一時的なメッセージを送る
+        await interaction.response.send_message("ごめんなさい、現在AIモデルの準備ができていません。", ephemeral=True)
         return
 
-    # ユーザーへの応答メッセージを少し変更
-    await ctx.send(f"テーマ：`{prompt}`\n\nこのテーマについて、深く考えています… 🤔")
-    async with ctx.typing():
-        try:
-            # 魔法の呪文（プロンプトテンプレート）を用意
-            thinking_prompt = f"""以下の問いに対して、ステップ・バイ・ステップで深く考察し、その思考プロセスと最終的な結論を日本語で記述してください。
+    # 「考え中...」の表示を出す（こちらも実行者のみに見える）
+    await interaction.response.defer(thinking=True, ephemeral=True)
+    
+    try:
+        response = gemini_model.generate_content(prompt)
+        # 最初の応答の後は followup.send を使う
+        await interaction.followup.send(f"> {prompt}\n\n{response.text}")
+    except Exception as e:
+        print(f"Gemini APIエラー: {e}")
+        await interaction.followup.send(f"> {prompt}\n\nごめんなさい、AIモデルとの通信中にエラーが発生しました。\n`{e}`")
 
+# /thinkコマンド
+@bot.tree.command(name="think", description="戦略家に深く思考させます。")
+@app_commands.describe(prompt="深く考えてほしいテーマを入力してください。")
+async def think_slash(interaction: discord.Interaction, prompt: str):
+    if not GEMINI_READY:
+        await interaction.response.send_message("ごめんなさい、現在AIモデルの準備ができていません。", ephemeral=True)
+        return
+
+    # こちらは全員に見えるようにする
+    await interaction.response.defer(thinking=True, ephemeral=False)
+    
+    try:
+        thinking_prompt = f"""以下の問いに対して、ステップ・バイ・ステップで深く考察し、その思考プロセスと最終的な結論を日本語で記述してください。
 ### 問い
 {prompt}
-
 ### 思考プロセス
 1. 問いの主要なキーワードを特定し、分解する。
-2. 
-""" # ◀️ 思考のヒントを少し与えることで、より構造化された回答を促す
-
-            response = gemini_model.generate_content(thinking_prompt)
+2. """
+        response = gemini_model.generate_content(thinking_prompt)
+        
+        # 応答にプロンプトを引用して、何についての思考か分かりやすくする
+        header = f"> **テーマ:** `{prompt}`\n\n"
+        
+        if len(response.text) > (1950 - len(header)):
+            await interaction.followup.send(header + response.text[:(1950 - len(header))] + "\n...(文字数制限のため、以下省略)...")
+        else:
+            await interaction.followup.send(header + response.text)
             
-            # Discordの文字数制限(2000文字)を超えないように、出力を最初の1950文字に制限
-            if len(response.text) > 1950:
-                await ctx.send(response.text[:1950] + "\n...(文字数制限のため、以下省略)...")
-            else:
-                await ctx.send(response.text)
-                
-        except Exception as e:
-            print(f"Thinkコマンドエラー: {e}")
-            await ctx.send(f"ごめんなさい、思考中にエラーが発生しました。\n`{e}`")
+    except Exception as e:
+        print(f"Thinkコマンドエラー: {e}")
+        await interaction.followup.send(f"> **テーマ:** `{prompt}`\n\nごめんなさい、思考中にエラーが発生しました。\n`{e}`")
 
 # ============================================================================
 
+
+# --- ここから下は、これまでの「!」を使うコマンドです ---
+# --- スラッシュコマンドと共存できるので、そのままで大丈夫です ---
 
 # !marukofuコマンド
 @bot.command()
@@ -195,4 +199,3 @@ async def createstsaymessage(ctx, *, message: str):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
-
