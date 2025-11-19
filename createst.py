@@ -7,18 +7,28 @@ from discord.ext import commands
 from janome.tokenizer import Tokenizer
 import google.generativeai as genai
 
+
 # Botの定義は変更なし
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
 # ======================= Gemini APIの準備 =======================
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 GEMINI_READY = False
+HIDDEN_GEMINI_READY = False # 隠しモデル用のやつ
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
+
+        # 1. 安定版
         gemini_model = genai.GenerativeModel('gemini-flash-latest')
         print("Geminiモデルの準備に成功しました。")
         GEMINI_READY = True
+
+        # 2. Gemini3モデルのテスト
+        hidden_gemini_model = genai.GenerativeModel('gemini-3-pro-preview') # ◀️ あなたが指定した最新モデル！
+        print("プレビュー版Geminiモデル(3 Pro Preview)の準備に成功しました。")
+        HIDDEN_GEMINI_READY = True
+        
     except Exception as e:
         print(f"Geminiモデルの準備中にエラーが発生しました: {e}")
 else:
@@ -109,6 +119,23 @@ async def think_slash(interaction: discord.Interaction, prompt: str):
         print(f"Thinkコマンドエラー: {e}")
         await interaction.followup.send(f"> **テーマ:** `{prompt}`\n\nごめんなさい、思考中にエラーが発生しました。\n`{e}`")
 
+# /hidegeminiコマンド (Gemini 3 Previewを使用)
+@bot.tree.command(name="hidegemini", description="隠された賢者(Gemini 3 Preview)に質問します。")
+@app_commands.describe(prompt="最新モデルに聞きたい内容を入力してください。")
+async def hidegemini_slash(interaction: discord.Interaction, prompt: str):
+    if not HIDDEN_GEMINI_READY:
+        await interaction.response.send_message("ごめんなさい、隠された賢者はまだ準備ができていないようです。", ephemeral=True)
+        return
+
+    await interaction.response.defer(thinking=True, ephemeral=True)
+    
+    try:
+        # 💡 hidden_gemini_model を呼び出す！
+        response = hidden_gemini_model.generate_content(prompt)
+        await interaction.followup.send(f"> {prompt}\n\n{response.text}")
+    except Exception as e:
+        print(f"Gemini 3 APIエラー: {e}")
+        await interaction.followup.send(f"> {prompt}\n\nごめんなさい、隠された賢者との対話中にエラーが発生しました。\n`{e}`")
 # ============================================================================
 
 
@@ -199,3 +226,4 @@ async def createstsaymessage(ctx, *, message: str):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
