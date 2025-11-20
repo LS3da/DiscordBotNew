@@ -8,8 +8,8 @@ from janome.tokenizer import Tokenizer
 import google.generativeai as genai
 
 
-# Botの定義は変更なし
-bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
+# !コマンドとの決別
+bot = commands.Bot(command_prefix=' ', intents=discord.Intents.all())
 
 # ======================= Gemini APIの準備 =======================
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
@@ -240,17 +240,33 @@ async def omikuji_slash(interaction: discord.Interaction):
     # 💡 最初の応答である send_message で、一気に結果を送る！
     await interaction.response.send_message(f'{user_name} さんの今日の運勢は... **{fortune}** です！')
 
-# !createstsaymessageコマンド
-@bot.command()
-async def createstsaymessage(ctx, *, message: str):
-    try:
-        await ctx.message.delete()
-    except (discord.errors.NotFound, discord.errors.Forbidden):
-        pass
-    await ctx.send(message)
+# /sayコマンド (特定のロールを持つ人のみ)
+@bot.tree.command(name="say", description="【管理者用】Botに代わってメッセージを送信します。")
+@app_commands.describe(message="Botに話させたい内容を入力してください。")
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ これが、権限を制限する魔法です ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+@app_commands.checks.has_role("CreatestAdmin") # ◀️ ここに、許可したいロールの名前を正確に入力します
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+async def say_slash(interaction: discord.Interaction, message: str):
+    
+    # 💡 ephemeral=True にすることで、コマンドの実行自体は本人にしか見えなくなる
+    await interaction.response.send_message("メッセージを代理で送信しました。", ephemeral=True)
+    
+    # 💡 interaction.channel を使うことで、コマンドが実行されたチャンネルにメッセージを送る
+    await interaction.channel.send(message)
+
+# 権限がない場合のエラーメッセージを、優しく上書きする
+@say_slash.error
+async def say_slash_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingRole):
+        await interaction.response.send_message("このコマンドを使うには、もっと大切なことをしないといけない...", ephemeral=True)
+    else:
+        # その他のエラーは、コンソールに表示しつつ、ユーザーにも伝える
+        print(error)
+        await interaction.response.send_message("すまねえ、読み上げれなかったぜ...", ephemeral=True)
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
