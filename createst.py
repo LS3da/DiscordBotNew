@@ -141,36 +141,53 @@ async def litegemini_slash(interaction: discord.Interaction, prompt: str):
 
 # --- ここから下は、これまでの「!」を使うコマンドです ---
 # --- スラッシュコマンドと共存できるので、そのままで大丈夫です ---
+# --- だったはずなんですが、スラッシュコマンド化されました ---
 
-# !marukofuコマンド
-@bot.command()
-async def marukofu(ctx):
-    try:
-        await ctx.message.delete()
-    except (discord.errors.NotFound, discord.errors.Forbidden):
-        pass
+# /marukofuコマンド
+@bot.tree.command(name="marukofu", description="詩人(マルコフ連鎖)が、記憶から言葉を紡ぎます。")
+async def marukofu_slash(interaction: discord.Interaction):
+    # 【仕事道具】秘書からの報告書(interaction)
+    
+    # 【仕事1】自分の命令(メッセージ)を削除する → そもそも命令が残らないので『不要』になる！
+
+    # 【仕事2】モデルの準備ができているか確認
     if not MODEL_READY:
-        await ctx.send("ごめんなさい、現在学習モデルの準備ができていないため、文章を生成できません。")
+        # 【応答方法】報告書(interaction)を使って、依頼主に直接返事をする
+        # ephemeral=True で、本人にだけ見えるようにする
+        await interaction.response.send_message("ごめんなさい、現在学習モデルの準備ができていません。", ephemeral=True)
         return
+        
+    # 💡【新しい仕事】「今から考えます」と依頼主に伝える
+    # thinking=Falseで「入力中...」は出さない
+    await interaction.response.defer(thinking=False, ephemeral=False)
+    
+    # 【仕事3】文章を生成する
     sentence = text_model.make_sentence(tries=300, max_chars=140)
+    
+    # 【仕事4】結果に応じて返事をする
+    # 💡 deferの後の返事は followup.send を使う
     if sentence:
-        await ctx.send(sentence.replace(" ", ""))
+        await interaction.followup.send(sentence.replace(" ", ""))
     else:
-        await ctx.send("ごめんなさい、学習データに基づいて文章をうまく生成できませんでした。")
+        await interaction.followup.send("ごめんなさい、学習データに基づいて文章をうまく生成できませんでした。")
 
-# !marukofushortコマンド
-@bot.command()
-async def marukofushort(ctx):
-    try:
-        await ctx.message.delete()
-    except (discord.errors.NotFound, discord.errors.Forbidden):
-        pass
+# /marukofushortコマンド
+@bot.tree.command(name="marukofushort", description="マルコフ連鎖による言葉を、よりコンパクトに。")
+async def marukofushort_slash(interaction: discord.Interaction):
+    # 【修正点1】最初の応答を、作法通り interaction.response で行う
     if not MODEL_READY:
-        await ctx.send("ごめんなさい、現在学習モデルの準備ができていないため、文章を生成できません。")
+        await interaction.response.send_message("ごめんなさい、現在学習モデルの準備ができていません。", ephemeral=True)
         return
+
+    # 「考えます」と先に伝えておく
+    await interaction.response.defer(thinking=False, ephemeral=False)
+    
+    # 元の文章を生成する
     long_sentence = text_model.make_sentence(tries=300, max_chars=140)
-    sentence = None
+    
+    sentence = None # 最終的に送信する文章を入れる変数
     if long_sentence:
+        # 【修正点2】元のコードにあった「文章を短くする処理」を、ここに持ってくる
         clean_sentence = long_sentence.replace(" ", "")
         kuten_index = clean_sentence.find("。")
         if kuten_index != -1:
@@ -181,39 +198,47 @@ async def marukofushort(ctx):
                 sentence = clean_sentence[:touten_index + 1]
             else:
                 sentence = clean_sentence
+    
+    # 【修正点3】最終的な結果を、followupで一度だけ送信する
     if sentence:
-        await ctx.send(sentence)
+        # ここでは .replace(" ", "") は不要（clean_sentenceの時点で処理済み）
+        await interaction.followup.send(sentence)
     else:
-        await ctx.send("ごめんなさい、学習データに基づいて短い文章をうまく生成できませんでした。")
+        await interaction.followup.send("ごめんなさい、学習データに基づいて短い文章をうまく生成できませんでした。")
 
-# !marukofulongコマンド
-@bot.command()
-async def marukofulong(ctx):
-    try:
-        await ctx.message.delete()
-    except (discord.errors.NotFound, discord.errors.Forbidden):
-        pass
+# /marukofulongコマンド
+@bot.tree.command(name="marukofulong", description="マルコフ連鎖の言葉を、より長く。")
+async def marukofulong_slash(interaction: discord.Interaction):
     if not MODEL_READY:
-        await ctx.send("ごめんなさい、現在学習モデルの準備ができていないため、文章を生成できません。")
+        await interaction.response.send_message("すまねえ、現在学習モデルの準備ができていないんだ。", ephemeral=True)
         return
+    await interaction.response.defer(thinking=False, ephemeral=False)
+    
+    
     sentence1 = text_model.make_sentence(tries=300, max_chars=140)
     sentence2 = text_model.make_sentence(tries=300, max_chars=140)
+    
     if sentence1 and sentence2:
         long_sentence = sentence1.replace(" ", "") + " " + sentence2.replace(" ", "")
-        await ctx.send(long_sentence)
+        await interaction.followup.send(long_sentence)
     else:
-        await ctx.send("ごめんなさい、学習データに基づいて長い文章をうまく生成できませんでした。")
+        await interaction.followup.send("すまん、学習データに基づいて長い文章をうまく生成できなかった。")
 
-# !omikujiコマンド
-@bot.command()
-async def omikuji(ctx):
-    try:
-        await ctx.message.delete()
-    except (discord.errors.NotFound, discord.errors.Forbidden):
-        pass
+# /omikujiコマンド
+@bot.tree.command(name="omikuji", description="おみくじを引いて、あなたの運気を測ろう。")
+async def omikuji_slash(interaction: discord.Interaction):
+    
+    # 💡【ピース2】すぐに返事ができるので、defer/followupは不要！
+    
+    # おみくじの結果を選ぶ
     results = ["大吉 🥳", "中吉 😊", "小吉 🙂", "吉 😉", "末吉 😐", "凶 😟", "大凶 😭"]
     fortune = random.choice(results)
-    await ctx.send(f'{ctx.author.display_name} さんの今日の運勢は... **{fortune}** です！')
+    
+    # 💡【ピース1】ctx.author ではなく、interaction.user を使う
+    user_name = interaction.user.display_name
+    
+    # 💡 最初の応答である send_message で、一気に結果を送る！
+    await interaction.response.send_message(f'{user_name} さんの今日の運勢は... **{fortune}** です！')
 
 # !createstsaymessageコマンド
 @bot.command()
@@ -226,5 +251,6 @@ async def createstsaymessage(ctx, *, message: str):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
