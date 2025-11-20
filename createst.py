@@ -14,20 +14,20 @@ bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 # ======================= Gemini APIの準備 =======================
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 GEMINI_READY = False
-HIDDEN_GEMINI_READY = False # 隠しモデル用のやつ
+LITE_GEMINI_READY = False # 軽量モデル
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
 
         # 1. 安定版
         gemini_model = genai.GenerativeModel('gemini-flash-latest')
-        print("Geminiモデルの準備に成功しました。")
+        print("Gemini モデルの準備に成功しました。")
         GEMINI_READY = True
 
-        # 2. Gemini3モデルのテスト
-        hidden_gemini_model = genai.GenerativeModel('gemini-3-pro-preview') # ◀️ あなたが指定した最新モデル！
-        print("プレビュー版Geminiモデル(3 Pro Preview)の準備に成功しました。")
-        HIDDEN_GEMINI_READY = True
+        # 2. Gemini Liteモデルのテスト
+        lite_gemini_model = genai.GenerativeModel('gemini-flash-lite-latest') # ライト版Gemini
+        print("超軽量Geminiモデルの準備に成功しました。")
+        LITE_GEMINI_READY = True
         
     except Exception as e:
         print(f"Geminiモデルの準備中にエラーが発生しました: {e}")
@@ -68,12 +68,12 @@ async def on_ready():
 # ======================= ここからがスラッシュコマンドです =======================
 
 # /geminiコマンド
-@bot.tree.command(name="gemini", description="賢者に質問します。")
+@bot.tree.command(name="gemini", description="博識な人に質問...")
 @app_commands.describe(prompt="質問したい内容を入力してください。")
 async def gemini_slash(interaction: discord.Interaction, prompt: str):
     if not GEMINI_READY:
         # ephemeral=True で、コマンド実行者にだけ見える一時的なメッセージを送る
-        await interaction.response.send_message("ごめんなさい、現在AIモデルの準備ができていません。", ephemeral=True)
+        await interaction.response.send_message("ごめんな、現在AIモデルが完了してない。もう少しだけ待ってくれる？", ephemeral=True)
         return
 
     # 「考え中...」の表示を出す（こちらも実行者のみに見える）
@@ -85,14 +85,14 @@ async def gemini_slash(interaction: discord.Interaction, prompt: str):
         await interaction.followup.send(f"> {prompt}\n\n{response.text}")
     except Exception as e:
         print(f"Gemini APIエラー: {e}")
-        await interaction.followup.send(f"> {prompt}\n\nごめんなさい、AIモデルとの通信中にエラーが発生しました。\n`{e}`")
+        await interaction.followup.send(f"> {prompt}\n\nあーあ、AIモデルとの通信中にエラーが発生しました。\n`{e}`")
 
 # /thinkコマンド
-@bot.tree.command(name="think", description="戦略家に深く思考させます。")
+@bot.tree.command(name="think", description="理屈から深く考える人に質問...")
 @app_commands.describe(prompt="深く考えてほしいテーマを入力してください。")
 async def think_slash(interaction: discord.Interaction, prompt: str):
     if not GEMINI_READY:
-        await interaction.response.send_message("ごめんなさい、現在AIモデルの準備ができていません。", ephemeral=True)
+        await interaction.response.send_message("あーあ、現在AIモデルの準備ができていません。", ephemeral=True)
         return
 
     # こちらは全員に見えるようにする
@@ -119,23 +119,23 @@ async def think_slash(interaction: discord.Interaction, prompt: str):
         print(f"Thinkコマンドエラー: {e}")
         await interaction.followup.send(f"> **テーマ:** `{prompt}`\n\nごめんなさい、思考中にエラーが発生しました。\n`{e}`")
 
-# /hidegeminiコマンド (Gemini 3 Previewを使用)
-@bot.tree.command(name="hidegemini", description="隠された賢者(Gemini 3 Preview)に質問します。")
-@app_commands.describe(prompt="最新モデルに聞きたい内容を入力してください。")
-async def hidegemini_slash(interaction: discord.Interaction, prompt: str):
-    if not HIDDEN_GEMINI_READY:
-        await interaction.response.send_message("ごめんなさい、隠された賢者はまだ準備ができていないようです。", ephemeral=True)
+# /geminiliteコマンド (Gemini Flash Latestを使用)
+@bot.tree.command(name="geminilite", description="超軽量なGeminiモデルに質問...")
+@app_commands.describe(prompt="軽量モデルに聞きたい内容を入力してください。")
+async def litegemini_slash(interaction: discord.Interaction, prompt: str):
+    if not LITE_GEMINI_READY:
+        await interaction.response.send_message("すんません、超軽量モデル準備できんかった...", ephemeral=True)
         return
 
     await interaction.response.defer(thinking=True, ephemeral=True)
     
     try:
-        # 💡 hidden_gemini_model を呼び出す！
-        response = hidden_gemini_model.generate_content(prompt)
+        # 💡 lite_gemini_model を呼び出す！
+        response = lite_gemini_model.generate_content(prompt)
         await interaction.followup.send(f"> {prompt}\n\n{response.text}")
     except Exception as e:
-        print(f"Gemini 3 APIエラー: {e}")
-        await interaction.followup.send(f"> {prompt}\n\nごめんなさい、隠された賢者との対話中にエラーが発生しました。\n`{e}`")
+        print(f"Gemini Lite APIエラー: {e}")
+        await interaction.followup.send(f"> {prompt}\n\nすまねえ、軽量モデルが話聞いてくれんかった...\n`{e}`")
 # ============================================================================
 
 
@@ -226,4 +226,5 @@ async def createstsaymessage(ctx, *, message: str):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
