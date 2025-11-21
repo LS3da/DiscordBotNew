@@ -68,7 +68,7 @@ async def on_ready():
 # ======================= ここからがスラッシュコマンドです =======================
 
 # /geminiコマンド
-@bot.tree.command(name="gemini", description="博識な人に質問...")
+@bot.tree.command(name="gemini", description="ある程度の事を、豊かに説明。")
 @app_commands.describe(prompt="質問したい内容を入力してください。")
 async def gemini_slash(interaction: discord.Interaction, prompt: str):
     if not GEMINI_READY:
@@ -85,14 +85,14 @@ async def gemini_slash(interaction: discord.Interaction, prompt: str):
         await interaction.followup.send(f"> {prompt}\n\n{response.text}")
     except Exception as e:
         print(f"Gemini APIエラー: {e}")
-        await interaction.followup.send(f"> {prompt}\n\nあーあ、AIモデルとの通信中にエラーが発生しました。\n`{e}`")
+        await interaction.followup.send(f"> {prompt}\n\nあ、すみません。AIモデルとの通信中にエラーが発生しちゃった。\n`{e}`")
 
 # /thinkコマンド
-@bot.tree.command(name="think", description="理屈から深く考える人に質問...")
+@bot.tree.command(name="think", description="ほとんどの事において、しっかり考える。")
 @app_commands.describe(prompt="深く考えてほしいテーマを入力してください。")
 async def think_slash(interaction: discord.Interaction, prompt: str):
     if not GEMINI_READY:
-        await interaction.response.send_message("あーあ、現在AIモデルの準備ができていません。", ephemeral=True)
+        await interaction.response.send_message("あーあ、現在AIモデルの準備ができていないんだ。", ephemeral=True)
         return
 
     # こちらは全員に見えるようにする
@@ -120,8 +120,8 @@ async def think_slash(interaction: discord.Interaction, prompt: str):
         await interaction.followup.send(f"> **テーマ:** `{prompt}`\n\nごめんなさい、思考中にエラーが発生しました。\n`{e}`")
 
 # /geminiliteコマンド (Gemini Flash Latestを使用)
-@bot.tree.command(name="geminilite", description="超軽量なGeminiモデルに質問...")
-@app_commands.describe(prompt="軽量モデルに聞きたい内容を入力してください。")
+@bot.tree.command(name="geminilite", description="条件反射で答える人に質問...")
+@app_commands.describe(prompt="聞きたい内容を入力してください。")
 async def litegemini_slash(interaction: discord.Interaction, prompt: str):
     if not LITE_GEMINI_READY:
         await interaction.response.send_message("すんません、超軽量モデル準備できんかった...", ephemeral=True)
@@ -135,7 +135,7 @@ async def litegemini_slash(interaction: discord.Interaction, prompt: str):
         await interaction.followup.send(f"> {prompt}\n\n{response.text}")
     except Exception as e:
         print(f"Gemini Lite APIエラー: {e}")
-        await interaction.followup.send(f"> {prompt}\n\nすまねえ、軽量モデルが話聞いてくれんかった...\n`{e}`")
+        await interaction.followup.send(f"> {prompt}\n\nすまねえ、軽量モデルが話聞いてくれんかったんよ...\n`{e}`")
 # ============================================================================
 
 
@@ -144,7 +144,7 @@ async def litegemini_slash(interaction: discord.Interaction, prompt: str):
 # --- だったはずなんですが、スラッシュコマンド化されました ---
 
 # /marukofuコマンド
-@bot.tree.command(name="marukofu", description="詩人(マルコフ連鎖)が、記憶から言葉を紡ぎます。")
+@bot.tree.command(name="marukofu", description="知っている事を、ミックスして識る。")
 async def marukofu_slash(interaction: discord.Interaction):
     # 【仕事道具】秘書からの報告書(interaction)
     
@@ -204,7 +204,7 @@ async def marukofushort_slash(interaction: discord.Interaction):
         # ここでは .replace(" ", "") は不要（clean_sentenceの時点で処理済み）
         await interaction.followup.send(sentence)
     else:
-        await interaction.followup.send("ごめんなさい、学習データに基づいて短い文章をうまく生成できませんでした。")
+        await interaction.followup.send("ごめんね、学習データに基づいて短い文章をうまく生成できませんでした。")
 
 # /marukofulongコマンド
 @bot.tree.command(name="marukofulong", description="マルコフ連鎖の言葉を、より長く。")
@@ -240,6 +240,73 @@ async def omikuji_slash(interaction: discord.Interaction):
     # 💡 最初の応答である send_message で、一気に結果を送る！
     await interaction.response.send_message(f'{user_name} さんの今日の運勢は... **{fortune}** です！')
 
+# /reactionコマンド：リアクションロールパネルを作成
+@bot.tree.command(name="reaction", description="【ロール管理者権限】リアクションでロールを付与するパネルを作成します。")
+@app_commands.describe(
+    message="パネルに表示するメッセージ (例: ゲームする人はリアクション！)",
+    emoji="リアクションに使用する絵文字 (例: 💣)",
+    role="付与するロールを選択してください。"
+)
+@app_commands.checks.has_permissions(manage_roles=True) # ◀️ ロール管理権限を持つ人だけが使える魔法
+async def reaction_slash(interaction: discord.Interaction, message: str, emoji: str, role: discord.Role):
+    
+    # 運営からの実行完了メッセージ（本人にしか見えない）
+    await interaction.response.send_message(f"リアクションロールパネルを作成しました。\n- 絵文字: {emoji}\n- ロール: @{role.name}", ephemeral=True)
+    
+    # Botが投稿する募集パネルの作成
+    embed = discord.Embed(
+        title=f"【リアクションロール】",
+        description=f"**{message}**\n\n下の {emoji} でリアクションすると、\n`@{role.name}` ロールが付与されます。",
+        color=discord.Color.blue()
+    )
+    
+    # 実際にパネルをチャンネルに投稿し、そのメッセージ情報を取得
+    panel_message = await interaction.channel.send(embed=embed)
+    
+    # 最後に、Bot自身がそのメッセージに指定された絵文字でリアクションする
+    await panel_message.add_reaction(emoji)
+
+# リアクションが「追加」されたことを監視するイベント
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    # Bot自身のリアクションは無視する
+    if payload.user_id == bot.user.id:
+        return
+
+    # どのサーバー(guild)で、どのチャンネル(channel)で、どのメッセージ(message)かを取得
+    guild = bot.get_guild(payload.guild_id)
+    channel = guild.get_channel(payload.channel_id)
+    message = await channel.fetch_message(payload.message_id)
+    
+    # リアクションされたメッセージがBotの投稿で、かつEmbed形式(パネル)でなければ無視
+    if message.author.id != bot.user.id or not message.embeds:
+        return
+        
+    # Embedのタイトルが「【リアクションロール】」でなければ無視
+    if message.embeds[0].title != "【リアクションロール】":
+        return
+
+    # Embedの説明文から、どの絵文字とどのロールが対応しているかを読み取る
+    # （ここは、より堅牢にするために、DBやファイルに保存するのが理想ですが、今回は説明文から抽出します）
+    description = message.embeds[0].description
+    try:
+        target_emoji = description.split("下の ")[1].split(" ")[0]
+        role_name = description.split("`@")[1].split("`")[0]
+    except IndexError:
+        return # 説明文の形式が違う場合は無視
+
+    # 押されたリアクションが、パネルで指定された絵文字と一致するか確認
+    if str(payload.emoji) == target_emoji:
+        # ロールを取得
+        role_to_add = discord.utils.get(guild.roles, name=role_name)
+        # リアクションしたメンバーを取得
+        member = guild.get_member(payload.user_id)
+        
+        if role_to_add and member:
+            # メンバーにロールを付与！
+            await member.add_roles(role_to_add)
+            print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
+
 # /sayコマンド (特定のロールを持つ人のみ)
 @bot.tree.command(name="say", description="【管理者用】Botに代わってメッセージを送信します。")
 @app_commands.describe(message="Botに話させたい内容を入力してください。")
@@ -258,14 +325,15 @@ async def say_slash(interaction: discord.Interaction, message: str):
 @say_slash.error
 async def say_slash_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingRole):
-        await interaction.response.send_message("このコマンドを使うには、もっと大切なことをしないといけない...", ephemeral=True)
+        await interaction.response.send_message("このコマンドを使うには、もっと大切なことをしないといけないんだ...", ephemeral=True)
     else:
         # その他のエラーは、コンソールに表示しつつ、ユーザーにも伝える
         print(error)
-        await interaction.response.send_message("すまねえ、読み上げれなかったぜ...", ephemeral=True)
+        await interaction.response.send_message("読み上げる時に、何故かカンペが破れちまった。", ephemeral=True)
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
