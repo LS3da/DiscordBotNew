@@ -241,13 +241,13 @@ async def omikuji_slash(interaction: discord.Interaction):
     await interaction.response.send_message(f'{user_name} さんの今日の運勢は... **{fortune}** です！')
 
 # /reactionコマンド：リアクションロールパネルを作成
-@bot.tree.command(name="reaction", description="【ロール管理者権限】リアクションでロールを付与するパネルを作成します。")
+@bot.tree.command(name="reaction", description="【ロール管理者権限】リアクションでロールを付与/剥奪するパネルを作成します。")
 @app_commands.describe(
     message="パネルに表示するメッセージ (例: ゲームする人はリアクション！)",
     emoji="リアクションに使用する絵文字 (例: 💣)",
-    role="付与するロールを選択してください。"
+    role="付与/剥奪するロールを選択してください。"
 )
-@app_commands.checks.has_permissions(manage_roles=True) # ◀️ ロール管理権限を持つ人だけが使える魔法
+@app_commands.checks.has_permissions(manage_roles=True)
 async def reaction_slash(interaction: discord.Interaction, message: str, emoji: str, role: discord.Role):
     
     # 運営からの実行完了メッセージ（本人にしか見えない）
@@ -256,7 +256,7 @@ async def reaction_slash(interaction: discord.Interaction, message: str, emoji: 
     # Botが投稿する募集パネルの作成
     embed = discord.Embed(
         title=f"【リアクションロール】",
-        description=f"**{message}**\n\n下の {emoji} でリアクションすると、\n`@{role.name}` ロールが付与されます。",
+        description=f"**{message}**\n\n下の {emoji} でリアクションすると、\n`@{role.name}` ロールが付与/剥奪されます。",
         color=discord.Color.blue()
     )
     
@@ -274,9 +274,17 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         return
 
     # どのサーバー(guild)で、どのチャンネル(channel)で、どのメッセージ(message)かを取得
+    # guild, channel, message が None になる可能性への対処を追加
     guild = bot.get_guild(payload.guild_id)
+    if not guild: return
+    
     channel = guild.get_channel(payload.channel_id)
-    message = await channel.fetch_message(payload.message_id)
+    if not channel: return
+    
+    try:
+        message = await channel.fetch_message(payload.message_id)
+    except discord.NotFound:
+        return # メッセージが見つからない場合は処理を中断
     
     # リアクションされたメッセージがBotの投稿で、かつEmbed形式(パネル)でなければ無視
     if message.author.id != bot.user.id or not message.embeds:
@@ -287,7 +295,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         return
 
     # Embedの説明文から、どの絵文字とどのロールが対応しているかを読み取る
-    # （ここは、より堅牢にするために、DBやファイルに保存するのが理想ですが、今回は説明文から抽出します）
     description = message.embeds[0].description
     try:
         target_emoji = description.split("下の ")[1].split(" ")[0]
@@ -297,26 +304,33 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 
     # 押されたリアクションが、パネルで指定された絵文字と一致するか確認
     if str(payload.emoji) == target_emoji:
-        # ロールを取得
         role_to_add = discord.utils.get(guild.roles, name=role_name)
-        # リアクションしたメンバーを取得
         member = guild.get_member(payload.user_id)
         
         if role_to_add and member:
             # メンバーにロールを付与！
             await member.add_roles(role_to_add)
             print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
-    # リアクションが「削除」されたことを監視するイベント
-    @bot.event
-    async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
-    # Bot自身のリアクションは無視する (念のため)
+
+# リアクションが「削除」されたことを監視するイベント
+@bot.event
+async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
+    # Bot自身のリアクションは無視する
     if payload.user_id == bot.user.id:
         return
 
     # どのサーバー(guild)で、どのチャンネル(channel)で、どのメッセージ(message)かを取得
+    # guild, channel, message が None になる可能性への対処を追加
     guild = bot.get_guild(payload.guild_id)
+    if not guild: return
+    
     channel = guild.get_channel(payload.channel_id)
-    message = await channel.fetch_message(payload.message_id)
+    if not channel: return
+    
+    try:
+        message = await channel.fetch_message(payload.message_id)
+    except discord.NotFound:
+        return # メッセージが見つからない場合は処理を中断
     
     # リアクションされたメッセージがBotの投稿で、かつEmbed形式(パネル)でなければ無視
     if message.author.id != bot.user.id or not message.embeds:
@@ -336,13 +350,11 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 
     # 押されたリアクションが、パネルで指定された絵文字と一致するか確認
     if str(payload.emoji) == target_emoji:
-        # ロールを取得
         role_to_remove = discord.utils.get(guild.roles, name=role_name)
-        # リアクションしたメンバーを取得
         member = guild.get_member(payload.user_id)
         
         if role_to_remove and member:
-            # 💡 メンバーからロールを剥奪！
+            # メンバーからロールを剥奪！
             await member.remove_roles(role_to_remove)
             print(f"{member.display_name} から @{role_to_remove.name} を剥奪しました。")
 
@@ -372,6 +384,7 @@ async def say_slash_error(interaction: discord.Interaction, error: app_commands.
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
