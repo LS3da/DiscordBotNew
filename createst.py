@@ -277,32 +277,28 @@ async def omikuji_slash(interaction: discord.Interaction):
 @app_commands.checks.has_permissions(manage_roles=True)
 async def reaction_slash(interaction: discord.Interaction, message: str, emoji: str, role: discord.Role):
 
-    # 💡 ユーザーがカスタム絵文字を入力したかチェック (例: <:name:ID>)
+    # 1. 絵文字の変換と処理
     if emoji.startswith('<') and emoji.endswith('>') and ':' in emoji:
-        # カスタム絵文字の場合、IDと名前の形式をBotが理解できる形式に変換する
-        # name:ID の部分だけを抽出する (例: "name:1234567890")
         processed_emoji = emoji.split(':')[1] + ':' + emoji.split(':')[2].replace('>', '')
     else:
-        # 標準絵文字の場合は、そのまま使う
         processed_emoji = emoji
         
-    await panel_message.add_reaction(processed_emoji)
-    
-    # 運営からの実行完了メッセージ（本人にしか見えない）
-    await interaction.response.send_message(f"リアクションロールパネルを作成しました。\n- 絵文字: {emoji}\n- ロール: @{role.name}", ephemeral=True)
-    
-    # Botが投稿する募集パネルの作成
+    # 2. Embedの作成（メッセージ投稿の準備）
     embed = discord.Embed(
         title=f"【リアクションロール】",
         description=f"**{message}**\n\n下の {emoji} でリアクションすると、\n`@{role.name}` ロールが付与/剥奪されます。",
         color=discord.Color.blue()
     )
     
-    # 実際にパネルをチャンネルに投稿し、そのメッセージ情報を取得
-    panel_message = await interaction.channel.send(embed=embed)
+    # 3. メッセージの投稿と記憶 (panel_messageがここで誕生する！)
+    # 💡 最初に投稿しなければ、Botはリアクションを付けるメッセージを知らない
+    panel_message = await interaction.channel.send(embed=embed) 
     
-    # 最後に、Bot自身がそのメッセージに指定された絵文字でリアクションする
-    await panel_message.add_reaction(emoji)
+    # 4. 実行完了メッセージの送信 (これは、どこにあっても大丈夫)
+    await interaction.response.send_message(f"リアクションロールパネルを作成しました。\n- 絵文字: {emoji}\n- ロール: @{role.name}", ephemeral=True)
+    
+    # 5. Botによるリアクション (ここで panel_message を使う！)
+    await panel_message.add_reaction(processed_emoji)
 
 # リアクションが「追加」されたことを監視するイベント
 @bot.event
@@ -538,6 +534,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
