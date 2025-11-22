@@ -405,34 +405,32 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    # コマンドの処理（!や/コマンドの処理を優先させる）
     await bot.process_commands(message) 
 
-    # 禁止ワードフィルタが準備できていない場合は無視
     if not BADWORDS_READY:
         return
         
-    # メッセージ内容を取得 (正規表現のため、小文字化はしない)
-    content = message.content
-    
-    # 💡 ユーザーの投稿したメッセージを、禁止ワードリストと照合（正規表現の出番！）
+    content = message.content.lower() # 💡 全て小文字にすることで、大文字/小文字を無視する
+
+    # 💡 究極の「区切り無視」パターンを構築（句読点、スペース、行末を許容）
+    # (例: バカ の後に、句読点、スペース、または文字列の終わりが来ているか？)
+    # ----------------------------------------------------------------------
+    # [ \.,!?"'。、！？―] は、よく使われる記号の集合
+    # $ は、文字列の終わり
+    # ----------------------------------------------------------------------
     for badword in BADWORDS_LIST:
-        # ----------------------------------------------------
-        # 究極のチェックパターンを構築
-        # ----------------------------------------------------
-        # 1. ワードを「単語」として認識させるためのパターン
-        #    これにより、「バカンス」の中の「バカ」は無視され、「バカ」だけが独立している時だけ検知されます。
-        pattern = r'\b' + re.escape(badword) + r'\b'
+        # 💡 パターンを構築: [禁止ワード] + [句読点・スペース・行末]
+        # r を使ってRAW文字列にし、re.escape で禁止ワードに記号が入っていても安全にする
+        # re.IGNORECASEは、content.lower() で処理しているため不要だが、念のため。
+        pattern_str = r'\b' + re.escape(badword.lower()) + r'(?:[ \.,!?"\'。、！？―]|$)'
         
-        # 2. 全角/半角、ひらがな/カタカナ、英字の大文字/小文字を全て同一視する変換（非常に高度！）
-        #    ただし、これは非常に複雑になるため、今回は「単語の区切り」チェックに絞ります。
-        #    （複雑な変換を避け、Botの軽快さを保つため）
-        
-        # 3. 検索を実行
-        if re.search(pattern, content, re.IGNORECASE): # re.IGNORECASEで大文字/小文字を無視
+        # 💡 パターンをコンパイル
+        compiled_pattern = re.compile(pattern_str, re.IGNORECASE)
+
+        # 検索を実行
+        if compiled_pattern.search(content):
             
             # 禁止ワードが含まれていた場合の処理
-            
             # 1. メッセージを削除
             try:
                 await message.delete()
@@ -443,18 +441,16 @@ async def on_message(message):
             try:
                 await message.author.send(
                     f"⚠️ **【警告】** サーバー内で禁止されている単語『{badword}』が**単語**として含まれていましたので、あなたのメッセージは削除されました。\n"
-                    f"メッセージの内容: `{message.content}`\n"
                     f" Botの規約を守って、安全なコミュニティにご協力ください。"
                 )
             except discord.Forbidden:
-                # DMが送れない場合（DMを閉じている等）は無視
                 pass
                 
-            # 3. 処理を終了 (一つ見つかれば十分)
             return
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
