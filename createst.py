@@ -301,7 +301,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         return
 
     # どのサーバー(guild)で、どのチャンネル(channel)で、どのメッセージ(message)かを取得
-    # guild, channel, message が None になる可能性への対処を追加
     guild = bot.get_guild(payload.guild_id)
     if not guild: return
     
@@ -321,23 +320,32 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     if message.embeds[0].title != "【リアクションロール】":
         return
 
-    # Embedの説明文から、どの絵文字とどのロールが対応しているかを読み取る
+    # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 究極の解析ロジックに変更 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+    # ロール名（`@...`で囲まれた部分）を正規表現で確実に抽出する
     description = message.embeds[0].description
     try:
-        target_emoji = description.split("下の ")[1].split(" ")[0]
-        role_name = description.split("`@")[1].split("`")[0]
-    except IndexError:
-        return # 説明文の形式が違う場合は無視
-
-    # 押されたリアクションが、パネルで指定された絵文字と一致するか確認
-    if str(payload.emoji) == target_emoji:
-        role_to_add = discord.utils.get(guild.roles, name=role_name)
-        member = guild.get_member(payload.user_id)
+        role_match = re.search(r'`@([^`]+)`', description)
         
-        if role_to_add and member:
-            # メンバーにロールを付与！
-            await member.add_roles(role_to_add)
-            print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
+        if not role_match:
+            return # ロール名が見つからない場合は無視（解析失敗）
+            
+        role_name = role_match.group(1) # 抽出したロール名
+    
+    except Exception:
+        return # その他のエラーで解析失敗の場合は無視
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+    # 押されたリアクションが、Botが設定した絵文字と一致するか確認
+    # (ここでは、どんな絵文字が押されても、Botが最初に付けた絵文字と一致するかどうかは判断しない)
+    # 💡 どの絵文字が押されたかに関わらず、ロール付与の処理を継続する
+    
+    role_to_add = discord.utils.get(guild.roles, name=role_name)
+    member = guild.get_member(payload.user_id)
+    
+    if role_to_add and member:
+        # メンバーにロールを付与！
+        await member.add_roles(role_to_add)
+        print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
 
 # リアクションが「削除」されたことを監視するイベント
 @bot.event
@@ -347,7 +355,6 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
         return
 
     # どのサーバー(guild)で、どのチャンネル(channel)で、どのメッセージ(message)かを取得
-    # guild, channel, message が None になる可能性への対処を追加
     guild = bot.get_guild(payload.guild_id)
     if not guild: return
     
@@ -367,23 +374,31 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     if message.embeds[0].title != "【リアクションロール】":
         return
 
-    # Embedの説明文から、どの絵文字とどのロールが対応しているかを読み取る
+    # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 究極の解析ロジックに変更 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+    # ロール名（`@...`で囲まれた部分）を正規表現で確実に抽出する
     description = message.embeds[0].description
     try:
-        target_emoji = description.split("下の ")[1].split(" ")[0]
-        role_name = description.split("`@")[1].split("`")[0]
-    except IndexError:
-        return # 説明文の形式が違う場合は無視
-
-    # 押されたリアクションが、パネルで指定された絵文字と一致するか確認
-    if str(payload.emoji) == target_emoji:
-        role_to_remove = discord.utils.get(guild.roles, name=role_name)
-        member = guild.get_member(payload.user_id)
+        role_match = re.search(r'`@([^`]+)`', description)
         
-        if role_to_remove and member:
-            # メンバーからロールを剥奪！
-            await member.remove_roles(role_to_remove)
-            print(f"{member.display_name} から @{role_to_remove.name} を剥奪しました。")
+        if not role_match:
+            return # ロール名が見つからない場合は無視（解析失敗）
+            
+        role_name = role_match.group(1) # 抽出したロール名
+    
+    except Exception:
+        return # その他のエラーで解析失敗の場合は無視
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+    # 押されたリアクションが、Botが設定した絵文字と一致するか確認
+    # 💡 どの絵文字が押されたかに関わらず、ロール剥奪の処理を継続する
+    
+    role_to_remove = discord.utils.get(guild.roles, name=role_name)
+    member = guild.get_member(payload.user_id)
+    
+    if role_to_remove and member:
+        # メンバーからロールを剥奪！
+        await member.remove_roles(role_to_remove)
+        print(f"{member.display_name} から @{role_to_remove.name} を剥奪しました。")
 
 # /sayコマンド (特定のロールを持つ人のみ)
 @bot.tree.command(name="say", description="【管理者用】Botに代わってメッセージを送信します。")
@@ -512,6 +527,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
