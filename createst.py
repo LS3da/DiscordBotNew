@@ -8,6 +8,7 @@ from janome.tokenizer import Tokenizer
 import google.generativeai as genai
 import re
 import asyncio
+import unicodedata
 
 
 # !コマンドとの決別
@@ -269,19 +270,21 @@ async def omikuji_slash(interaction: discord.Interaction):
 
 # /reactionコマンド：リアクションロールパネルを作成
 @bot.tree.command(name="reaction", description="【ロール管理者権限】リアクションでロールを付与/剥奪するパネルを作成します。")
-@app_commands.describe(
-    message="パネルに表示するメッセージ (例: ゲームする人はリアクション！)",
-    emoji="リアクションに使用する絵文字 (例: 💣)",
-    role="付与/剥奪するロールを選択してください。"
-)
+# ... (デコレータと引数は省略)
 @app_commands.checks.has_permissions(manage_roles=True)
 async def reaction_slash(interaction: discord.Interaction, message: str, emoji: str, role: discord.Role):
 
     # 1. 絵文字の変換と処理
     if emoji.startswith('<') and emoji.endswith('>') and ':' in emoji:
+        # カスタム絵文字の場合
         processed_emoji = emoji.split(':')[1] + ':' + emoji.split(':')[2].replace('>', '')
     else:
-        processed_emoji = emoji
+        # 💡 標準絵文字の場合：バリエーション（毒）を抜く！
+        # NFD (Normal Form D) で分解し、非スペーシングマーク（毒）を削除し、NFCで再結合する
+        processed_emoji = "".join(
+            c for c in unicodedata.normalize("NFD", emoji)
+            if unicodedata.category(c) != "Mn" and unicodedata.category(c) != "Me"
+        )
         
     # 2. Embedの作成（メッセージ投稿の準備）
     embed = discord.Embed(
@@ -290,14 +293,13 @@ async def reaction_slash(interaction: discord.Interaction, message: str, emoji: 
         color=discord.Color.blue()
     )
     
-    # 3. メッセージの投稿と記憶 (panel_messageがここで誕生する！)
-    # 💡 最初に投稿しなければ、Botはリアクションを付けるメッセージを知らない
+    # 3. メッセージの投稿と記憶 
     panel_message = await interaction.channel.send(embed=embed) 
     
-    # 4. 実行完了メッセージの送信 (これは、どこにあっても大丈夫)
+    # 4. 実行完了メッセージの送信
     await interaction.response.send_message(f"リアクションロールパネルを作成しました。\n- 絵文字: {emoji}\n- ロール: @{role.name}", ephemeral=True)
     
-    # 5. Botによるリアクション (ここで panel_message を使う！)
+    # 5. Botによるリアクション (無害化された絵文字を使う！)
     await panel_message.add_reaction(processed_emoji)
 
 # リアクションが「追加」されたことを監視するイベント
@@ -534,6 +536,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
