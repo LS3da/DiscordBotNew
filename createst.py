@@ -426,6 +426,33 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
         await member.remove_roles(role_to_remove)
         print(f"{member.display_name} から @{role_to_remove.name} を剥奪しました。")
 
+# /callmesコマンド：通話への参加を促す（召集令状）
+@bot.tree.command(name="callmes", description="通話チャンネルへの参加を促します。")
+async def callmes_slash(interaction: discord.Interaction):
+    
+    # 1. Botの応答は、全員に見えるようにする
+    await interaction.response.defer(thinking=False, ephemeral=False)
+    
+    # 2. コマンドを打ったユーザーの名前とメンションを取得
+    user_mention = interaction.user.mention
+    user_name = interaction.user.display_name
+    
+    # 3. 召集令状のメッセージを構築
+    message = (
+        f"📣 **【通話参加者募集！】** 📣\n"
+        f"**{user_mention}** さんが、通話チャンネルであなたを待っています！\n"
+        f"みんなで一緒に話しませんか？\n\n"
+        f"（Botがこのメッセージを代理送信しています）"
+    )
+    
+    # 4. メッセージをチャンネルに送信
+    await interaction.followup.send(message)
+
+    # 5. 運営的なメッセージ（本人にだけ見えるように）
+    # 💡 最初に defer しているので、followup.send(ephemeral=True) を使う
+    # await interaction.followup.send("通話への参加を促すメッセージを送信しました。", ephemeral=True) 
+    # ↑今回は、メッセージが一つで済むように、deferのephemeralをFalseにしています。
+
 # /sayコマンド (特定のロールを持つ人のみ)
 @bot.tree.command(name="say", description="【管理者用】Botに代わってメッセージを送信します。")
 @app_commands.describe(message="Botに話させたい内容を入力してください。")
@@ -571,6 +598,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
