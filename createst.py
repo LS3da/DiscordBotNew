@@ -6,6 +6,7 @@ import markovify
 from discord.ext import commands
 from janome.tokenizer import Tokenizer
 import google.generativeai as genai
+import re
 
 
 # !コマンドとの決別
@@ -395,6 +396,8 @@ async def say_slash_error(interaction: discord.Interaction, error: app_commands.
         print(error)
         await interaction.response.send_message("読み上げる時に、何故かカンペが破れちまった。", ephemeral=True)
 
+# （/reactionコマンドのイベント関数の下、Bot起動の bot.run の上あたりに追加）
+
 # メッセージが投稿されるたびに呼び出される「守護者」イベント
 @bot.event
 async def on_message(message):
@@ -409,12 +412,25 @@ async def on_message(message):
     if not BADWORDS_READY:
         return
         
-    # メッセージを小文字に変換して、チェックしやすくする
-    content = message.content.lower()
+    # メッセージ内容を取得 (正規表現のため、小文字化はしない)
+    content = message.content
     
-    # 💡 ユーザーの投稿したメッセージを、禁止ワードリストと照合
+    # 💡 ユーザーの投稿したメッセージを、禁止ワードリストと照合（正規表現の出番！）
     for badword in BADWORDS_LIST:
-        if badword.lower() in content:
+        # ----------------------------------------------------
+        # 究極のチェックパターンを構築
+        # ----------------------------------------------------
+        # 1. ワードを「単語」として認識させるためのパターン
+        #    これにより、「バカンス」の中の「バカ」は無視され、「バカ」だけが独立している時だけ検知されます。
+        pattern = r'\b' + re.escape(badword) + r'\b'
+        
+        # 2. 全角/半角、ひらがな/カタカナ、英字の大文字/小文字を全て同一視する変換（非常に高度！）
+        #    ただし、これは非常に複雑になるため、今回は「単語の区切り」チェックに絞ります。
+        #    （複雑な変換を避け、Botの軽快さを保つため）
+        
+        # 3. 検索を実行
+        if re.search(pattern, content, re.IGNORECASE): # re.IGNORECASEで大文字/小文字を無視
+            
             # 禁止ワードが含まれていた場合の処理
             
             # 1. メッセージを削除
@@ -426,7 +442,7 @@ async def on_message(message):
             # 2. 警告をDMで送る（優しさモード）
             try:
                 await message.author.send(
-                    f"⚠️ **【警告】** サーバー内で禁止されている単語が含まれていましたので、あなたのメッセージは削除されました。\n"
+                    f"⚠️ **【警告】** サーバー内で禁止されている単語『{badword}』が**単語**として含まれていましたので、あなたのメッセージは削除されました。\n"
                     f"メッセージの内容: `{message.content}`\n"
                     f" Botの規約を守って、安全なコミュニティにご協力ください。"
                 )
@@ -439,6 +455,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
