@@ -276,6 +276,17 @@ async def omikuji_slash(interaction: discord.Interaction):
 )
 @app_commands.checks.has_permissions(manage_roles=True)
 async def reaction_slash(interaction: discord.Interaction, message: str, emoji: str, role: discord.Role):
+
+    # 💡 ユーザーがカスタム絵文字を入力したかチェック (例: <:name:ID>)
+    if emoji.startswith('<') and emoji.endswith('>') and ':' in emoji:
+        # カスタム絵文字の場合、IDと名前の形式をBotが理解できる形式に変換する
+        # name:ID の部分だけを抽出する (例: "name:1234567890")
+        processed_emoji = emoji.split(':')[1] + ':' + emoji.split(':')[2].replace('>', '')
+    else:
+        # 標準絵文字の場合は、そのまま使う
+        processed_emoji = emoji
+        
+    await panel_message.add_reaction(processed_emoji)
     
     # 運営からの実行完了メッセージ（本人にしか見えない）
     await interaction.response.send_message(f"リアクションロールパネルを作成しました。\n- 絵文字: {emoji}\n- ロール: @{role.name}", ephemeral=True)
@@ -527,6 +538,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
