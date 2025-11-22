@@ -69,6 +69,18 @@ except FileNotFoundError:
     BADWORDS_READY = False
 # =====================================================================
 
+# ======================= ホワイトリストの準備 =======================
+WHITELIST_LIST = []
+try:
+    with open("whitelist.txt", encoding="utf-8") as f:
+        WHITELIST_LIST = [word.strip().lower() for word in f.readlines() if word.strip()]
+    print(f"ホワイトリストの読み込みに成功しました。({len(WHITELIST_LIST)}個)")
+    WHITELIST_READY = True
+except FileNotFoundError:
+    print("ホワイトリストファイル 'whitelist.txt' が見つかりません。ホワイトリスト機能は無効です。")
+    WHITELIST_READY = False
+# =======================================================================
+
 @bot.event
 async def on_ready():
     print(f'Login OK: {bot.user} (ID: {bot.user.id})')
@@ -401,55 +413,50 @@ async def say_slash_error(interaction: discord.Interaction, error: app_commands.
 # メッセージが投稿されるたびに呼び出される「守護者」イベント
 @bot.event
 async def on_message(message):
-    # Bot自身のメッセージは無視
-    if message.author == bot.user:
-        return
-
-    await bot.process_commands(message) 
-
-    if not BADWORDS_READY:
-        return
-        
-    content = message.content.lower() # 💡 全て小文字にすることで、大文字/小文字を無視する
-
-    # 💡 究極の「区切り無視」パターンを構築（句読点、スペース、行末を許容）
-    # (例: バカ の後に、句読点、スペース、または文字列の終わりが来ているか？)
-    # ----------------------------------------------------------------------
-    # [ \.,!?"'。、！？―] は、よく使われる記号の集合
-    # $ は、文字列の終わり
-    # ----------------------------------------------------------------------
+    # ... (Bot自身のメッセージ、process_commandsなどは省略) ...
+    
+    # ----------------------------------------------------
+    # 実戦的かつ論理的な禁止ワードチェック
+    # ----------------------------------------------------
+    content = message.content.lower() 
+    
     for badword in BADWORDS_LIST:
-        # 💡 パターンを構築: [禁止ワード] + [句読点・スペース・行末]
-        # r を使ってRAW文字列にし、re.escape で禁止ワードに記号が入っていても安全にする
-        # re.IGNORECASEは、content.lower() で処理しているため不要だが、念のため。
-        pattern_str = r'\b' + re.escape(badword.lower()) + r'(?:[ \.,!?"\'。、！？―]|$)'
-        
-        # 💡 パターンをコンパイル
-        compiled_pattern = re.compile(pattern_str, re.IGNORECASE)
+        target_word = badword.lower()
 
-        # 検索を実行
-        if compiled_pattern.search(content):
+        # 1. 究極のパワープレイ：部分一致で一発検知
+        if target_word in content:
             
-            # 禁止ワードが含まれていた場合の処理
-            # 1. メッセージを削除
+            # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ ここに「門番」を追加します ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+            
+            # 2. 門番のチェック：このメッセージはホワイトリストに守られているか？
+            if WHITELIST_READY:
+                is_safe = False
+                for safe_word in WHITELIST_LIST:
+                    if safe_word in content:
+                        # 禁止ワードと同じメッセージ内に「無害な単語」が含まれている場合、
+                        # それは誤爆の可能性が高いので、今回は見逃す！
+                        is_safe = True
+                        break
+                
+                if is_safe:
+                    print(f"✅ ホワイトリストの単語を含むため、{target_word}の検知をスキップしました。")
+                    continue # 処理を中断し、次のメッセージを待つ
+            
+            # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+            # 3. 門番を突破した場合、実行：メッセージを削除
             try:
                 await message.delete()
             except (discord.errors.NotFound, discord.errors.Forbidden):
                 pass
             
-            # 2. 警告をDMで送る（優しさモード）
-            try:
-                await message.author.send(
-                    f"⚠️ **【警告】** サーバー内で禁止されている単語『{badword}』が**単語**として含まれていましたので、あなたのメッセージは削除されました。\n"
-                    f" Botの規約を守って、安全なコミュニティにご協力ください。"
-                )
-            except discord.Forbidden:
-                pass
+            # ... (警告DMの処理は省略) ...
                 
             return
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
