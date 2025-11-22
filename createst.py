@@ -55,6 +55,19 @@ except Exception as e:
     print(f"マルコフモデルの構築中にエラーが発生しました: {e}")
 # =====================================================================
 
+# ======================= 禁止ワードリストの準備 =======================
+BADWORDS_LIST = []
+try:
+    with open("badwords.txt", encoding="utf-8") as f:
+        # 改行と空行を削除してリスト化
+        BADWORDS_LIST = [word.strip() for word in f.readlines() if word.strip()]
+    print(f"禁止ワードリストの読み込みに成功しました。({len(BADWORDS_LIST)}個)")
+    BADWORDS_READY = True
+except FileNotFoundError:
+    print("禁止ワードファイル 'badwords.txt' が見つかりません。禁止ワードフィルタは無効です。")
+    BADWORDS_READY = False
+# =====================================================================
+
 @bot.event
 async def on_ready():
     print(f'Login OK: {bot.user} (ID: {bot.user.id})')
@@ -382,8 +395,51 @@ async def say_slash_error(interaction: discord.Interaction, error: app_commands.
         print(error)
         await interaction.response.send_message("読み上げる時に、何故かカンペが破れちまった。", ephemeral=True)
 
+# メッセージが投稿されるたびに呼び出される「守護者」イベント
+@bot.event
+async def on_message(message):
+    # Bot自身のメッセージは無視
+    if message.author == bot.user:
+        return
+
+    # コマンドの処理（!や/コマンドの処理を優先させる）
+    await bot.process_commands(message) 
+
+    # 禁止ワードフィルタが準備できていない場合は無視
+    if not BADWORDS_READY:
+        return
+        
+    # メッセージを小文字に変換して、チェックしやすくする
+    content = message.content.lower()
+    
+    # 💡 ユーザーの投稿したメッセージを、禁止ワードリストと照合
+    for badword in BADWORDS_LIST:
+        if badword.lower() in content:
+            # 禁止ワードが含まれていた場合の処理
+            
+            # 1. メッセージを削除
+            try:
+                await message.delete()
+            except (discord.errors.NotFound, discord.errors.Forbidden):
+                pass
+            
+            # 2. 警告をDMで送る（優しさモード）
+            try:
+                await message.author.send(
+                    f"⚠️ **【警告】** サーバー内で禁止されている単語が含まれていましたので、あなたのメッセージは削除されました。\n"
+                    f"メッセージの内容: `{message.content}`\n"
+                    f" Botの規約を守って、安全なコミュニティにご協力ください。"
+                )
+            except discord.Forbidden:
+                # DMが送れない場合（DMを閉じている等）は無視
+                pass
+                
+            # 3. 処理を終了 (一つ見つかれば十分)
+            return
+
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
