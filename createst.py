@@ -442,7 +442,7 @@ async def delete_slash(interaction: discord.Interaction, count: int):
             
             # 4. 究極の Rate Limit 回避策：削除の間に「優雅な一呼吸」を挟む
             #    0.5秒の停止は、Botの律儀さを保ちつつ、Discordに優しくする最適な間隔です
-            await asyncio.sleep(0.5) 
+            await asyncio.sleep(0.9) 
             
         # 5. 成功報告（全員に見えるように）
         await interaction.followup.send(
@@ -512,6 +512,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
