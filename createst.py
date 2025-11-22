@@ -83,6 +83,19 @@ except FileNotFoundError:
     WHITELIST_READY = False
 # =======================================================================
 
+# ======================= ホワイトチャンネルリストの準備 =======================
+WHITE_CHANNEL_IDS = []
+try:
+    with open("whitechannel.txt", encoding="utf-8") as f:
+        # IDを整数型に変換してリスト化
+        WHITE_CHANNEL_IDS = [int(line.strip()) for line in f.readlines() if line.strip() and line.strip().isdigit()]
+    print(f"ホワイトチャンネルリストの読み込みに成功しました。({len(WHITE_CHANNEL_IDS)}個)")
+    WHITE_CHANNEL_READY = True
+except FileNotFoundError:
+    print("ホワイトチャンネルファイル 'whitechannel.txt' が見つかりません。チャンネルフィルタは無効です。")
+    WHITE_CHANNEL_READY = False
+# =======================================================================
+
 @bot.event
 async def on_ready():
     print(f'Login OK: {bot.user} (ID: {bot.user.id})')
@@ -497,11 +510,27 @@ async def delete_slash_error(interaction: discord.Interaction, error: app_comman
 # メッセージが投稿されるたびに呼び出される「守護者」イベント
 @bot.event
 async def on_message(message):
-    # ... (Bot自身のメッセージ、process_commandsなどは省略) ...
+    # 1. Bot自身のメッセージ、およびコマンド処理は無視
+    if message.author.bot:
+        return
+
+    # 💡 スラッシュコマンドではなく、レガシーコマンド（!）をチェックする（必要に応じて）
+    await bot.process_commands(message) 
+
+    # --------------------------------------------------------------------
+    # 2. チャンネル・ホワイトリストによる「最優先の出口」チェック
+    # --------------------------------------------------------------------
+    if WHITE_CHANNEL_READY and message.channel.id in WHITE_CHANNEL_IDS:
+        # 規制対象外のチャンネルなので、処理を即座に終了！
+        # print(f"✅ チャンネルID {message.channel.id} はホワイトリストのため、フィルタをスキップします。") # ログが多すぎるのでコメントアウト
+        return 
     
-    # ----------------------------------------------------
-    # 実戦的かつ論理的な禁止ワードチェック
-    # ----------------------------------------------------
+    # --------------------------------------------------------------------
+    # 3. 禁止ワードフィルター（Black/Whiteリスト）チェック
+    # --------------------------------------------------------------------
+    if not BADWORDS_READY:
+        return
+        
     content = message.content.lower() 
     
     for badword in BADWORDS_LIST:
@@ -510,23 +539,18 @@ async def on_message(message):
         # 1. 究極のパワープレイ：部分一致で一発検知
         if target_word in content:
             
-            # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ ここに「門番」を追加します ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-            
             # 2. 門番のチェック：このメッセージはホワイトリストに守られているか？
+            is_safe = False
             if WHITELIST_READY:
-                is_safe = False
                 for safe_word in WHITELIST_LIST:
                     if safe_word in content:
-                        # 禁止ワードと同じメッセージ内に「無害な単語」が含まれている場合、
-                        # それは誤爆の可能性が高いので、今回は見逃す！
+                        # 無害な単語が含まれていたら、今回は見逃す！
                         is_safe = True
                         break
                 
-                if is_safe:
-                    print(f"✅ ホワイトリストの単語を含むため、{target_word}の検知をスキップしました。")
-                    continue # 処理を中断し、次のメッセージを待つ
-            
-            # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+            if is_safe:
+                # print(f"✅ ホワイトリストの単語を含むため、{target_word}の検知をスキップしました。")
+                continue # 処理を中断し、次の禁止ワードのチェックに移る
 
             # 3. 門番を突破した場合、実行：メッセージを削除
             try:
@@ -534,12 +558,20 @@ async def on_message(message):
             except (discord.errors.NotFound, discord.errors.Forbidden):
                 pass
             
-            # ... (警告DMの処理は省略) ...
+            # 4. 警告DMを送信
+            try:
+                await message.author.send(
+                    f"⚠️ **【警告】** サーバー内で禁止されている単語『{badword}』が含まれていましたので、あなたのメッセージは削除されました。"
+                )
+            except discord.Forbidden:
+                pass
                 
+            # 5. 処理を終了 (一つでも禁止ワードが見つかれば、メッセージは削除済みなのでOK)
             return
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
