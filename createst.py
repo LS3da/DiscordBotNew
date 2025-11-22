@@ -270,7 +270,11 @@ async def omikuji_slash(interaction: discord.Interaction):
 
 # /reactionコマンド：リアクションロールパネルを作成
 @bot.tree.command(name="reaction", description="【ロール管理者権限】リアクションでロールを付与/剥奪するパネルを作成します。")
-# ... (デコレータと引数は省略)
+@app_commands.describe(
+    message="パネルに表示するメッセージ (例: ゲームする人はリアクション！)",
+    emoji="リアクションに使用する絵文字 (例: 💣)",
+    role="付与/剥奪するロールを選択してください。"
+)
 @app_commands.checks.has_permissions(manage_roles=True)
 async def reaction_slash(interaction: discord.Interaction, message: str, emoji: str, role: discord.Role):
 
@@ -536,6 +540,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
