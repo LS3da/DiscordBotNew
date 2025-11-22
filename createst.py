@@ -7,6 +7,7 @@ from discord.ext import commands
 from janome.tokenizer import Tokenizer
 import google.generativeai as genai
 import re
+import asyncio
 
 
 # !コマンドとの決別
@@ -411,38 +412,48 @@ async def say_slash_error(interaction: discord.Interaction, error: app_commands.
 # /deleteコマンド：指定された数のメッセージを削除（パージ）
 @bot.tree.command(name="delete", description="【管理者用】指定した数のメッセージを一掃します。（最大100件）")
 @app_commands.describe(count="削除したいメッセージの数（1～100）")
-# ◀️ メッセージ管理権限を持つ人だけが使える魔法
 @app_commands.checks.has_permissions(manage_messages=True) 
 async def delete_slash(interaction: discord.Interaction, count: int):
     
-    # 1. 数のチェック（APIの最大制限は100件）
     if count < 1 or count > 100:
         await interaction.response.send_message("ごめんなさい、削除できるメッセージの数は1件から100件までです。", ephemeral=True)
         return
 
-    # 2. 処理を始めることを通知
     await interaction.response.defer(thinking=True, ephemeral=True)
     
+    deleted_count = 0
+    
     try:
-        # 3. メッセージを取得し、削除を実行
-        # bulk_deleteは、Botが最後に送ったメッセージ（/deleteコマンドのdeferの応答）も一緒に削除しないよう、+1の数を指定します
-        deleted = await interaction.channel.purge(limit=count + 1, bulk=True)
+        # 1. チャンネルのメッセージを、指定された数だけ取得 (Botの実行メッセージを含むため、+1)
+        #    history()は、Botの実行場所（チャンネル）のメッセージ履歴を取得します
+        messages = []
+        async for message in interaction.channel.history(limit=count + 1):
+            messages.append(message)
         
-        # 4. 成功報告
-        # 💡 Botが最後に送ったメッセージ（deleted[0]）を引いて、実際の削除数を計算
-        deleted_count = len(deleted) - 1
-        
-        # 5. 報告メッセージを送信（全員に見えるように、followupで）
+        # 2. 律儀な削除ループを実行（最後のBotのメッセージは消さない）
+        for message in messages:
+            # 💡 コマンド実行メッセージは削除せず、スキップする
+            if message.id == interaction.id:
+                continue
+
+            # 3. メッセージを削除
+            await message.delete()
+            deleted_count += 1
+            
+            # 4. 究極の Rate Limit 回避策：削除の間に「優雅な一呼吸」を挟む
+            #    0.5秒の停止は、Botの律儀さを保ちつつ、Discordに優しくする最適な間隔です
+            await asyncio.sleep(0.5) 
+            
+        # 5. 成功報告（全員に見えるように）
         await interaction.followup.send(
             f"🧹 **一掃完了！**\n"
-            f"管理者 {interaction.user.display_name} の命令により、最新の **{deleted_count}件** のメッセージが削除されました。"
-            f"\n\n*（Discordの仕様上、14日以上前のメッセージは削除できません）*",
-            ephemeral=False # 全員に見えるようにする
+            f"管理者 {interaction.user.display_name} の命令により、最新の **{deleted_count}件** のメッセージが削除されました。",
+            ephemeral=False
         )
 
     except Exception as e:
         print(f"Deleteコマンドエラー: {e}")
-        await interaction.followup.send(f"ごめんなさい、メッセージを一掃中にエラーが発生しました。\n`{e}`", ephemeral=True)
+        await interaction.followup.send(f"ごめんなさい、メッセージの一掃中にエラーが発生しました。\n`{e}`", ephemeral=True)
 
 # 権限がない場合のエラーメッセージ
 @delete_slash.error
@@ -501,6 +512,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
