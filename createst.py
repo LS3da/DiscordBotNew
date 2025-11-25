@@ -4,6 +4,7 @@ import os
 import random
 import markovify
 from discord.ext import commands
+from discord import ui # ◀️ ボタンを使うための新しい魔法
 from janome.tokenizer import Tokenizer
 import google.generativeai as genai
 import re
@@ -265,6 +266,41 @@ async def marukofulong_slash(interaction: discord.Interaction):
     else:
         await interaction.followup.send("すまん、学習データに基づいて長い文章をうまく生成できなかった。")
 
+# 💡 ボタンを押されたときに実行される設計図（クラス）
+class RollButtonView(discord.ui.View):
+    def __init__(self, diceroll: str):
+        super().__init__(timeout=None) # タイムアウトなしで永遠にボタンを残す
+        self.diceroll = diceroll
+        self.num_dice, self.num_sides = map(int, diceroll.lower().split('d'))
+        
+    # 💡 このメソッドが、ボタンを押されたときに実行される本体
+    @discord.ui.button(label="🎲 ダイスを振る", style=discord.ButtonStyle.primary, custom_id="persistent_roll_button")
+    async def button_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
+        
+        # 1. ロールを実行
+        results = [random.randint(1, self.num_sides) for _ in range(self.num_dice)]
+        total = sum(results)
+        
+        # 2. 結果の表示（全員に見えるように）
+        message = (
+            f"**{interaction.user.display_name}** が {self.diceroll.upper()} を振った結果: **{total}**\n"
+            f"内訳: `{results}`"
+        )
+        
+        # 3. チャンネルに投稿
+        await interaction.response.send_message(message)
+        
+        # 4. ボタンのメッセージを、誰が最後に振ったか追記して更新
+        original_embed = interaction.message.embeds[0]
+        original_embed.set_footer(text=f"最終実行者: {interaction.user.display_name} | {total}")
+        await interaction.message.edit(embed=original_embed, view=self)
+
+# 💡 Botが再起動したときにボタンを復活させる処理
+# @bot.event
+# async def on_ready_for_button_revival():
+#    bot.add_view(RollButtonView("1d6")) # 例: 起動時によく使うボタンを登録しておくと、ボタンが生き返る
+#    pass
+
 # /omikujiコマンド
 @bot.tree.command(name="omikuji", description="おみくじを引いて、あなたの運気を測ろう。")
 async def omikuji_slash(interaction: discord.Interaction):
@@ -453,6 +489,81 @@ async def callmes_slash(interaction: discord.Interaction):
     # await interaction.followup.send("通話への参加を促すメッセージを送信しました。", ephemeral=True) 
     # ↑今回は、メッセージが一つで済むように、deferのephemeralをFalseにしています。
 
+# /rollコマンド：ダイスロール機能
+@bot.tree.command(name="roll", description="ダイスを振ります (例: 1d100, 3d6)。")
+@app_commands.describe(diceroll="振りたいダイスの形式 (例: 1d100)")
+async def roll_slash(interaction: discord.Interaction, diceroll: str):
+    
+    # 応答をdeferし、結果が出るまで待たせる
+    await interaction.response.defer(thinking=True, ephemeral=False)
+    
+    try:
+        # 1. 入力チェックと解析 (例: 1d100 -> [1, 100])
+        if 'd' not in diceroll.lower():
+            await interaction.followup.send("ごめんなさい、入力形式が正しくありません。例: `1d100`", ephemeral=True)
+            return
+
+        num_dice, num_sides = map(int, diceroll.lower().split('d'))
+        
+        if num_dice <= 0 or num_sides <= 1:
+             await interaction.followup.send("ダイス数と面数は、1以上の整数である必要があります。", ephemeral=True)
+             return
+             
+        if num_dice > 20 or num_sides > 1000:
+            await interaction.followup.send("ダイスは最大20個、面数は最大1000までに制限しています。", ephemeral=True)
+            return
+
+        # 2. ダイスを振る
+        results = [random.randint(1, num_sides) for _ in range(num_dice)]
+        total = sum(results)
+        
+        # 3. 結果の表示
+        message = (
+            f"🎲 **{interaction.user.display_name} さんのダイスロール結果！**\n"
+            f"**{diceroll.upper()}** の合計: **{total}**\n"
+            f"内訳: `{results}`"
+        )
+        
+        await interaction.followup.send(message)
+        
+    except ValueError:
+        await interaction.followup.send("入力が整数ではありません。例: `1d6`", ephemeral=True)
+    except Exception as e:
+        print(f"Rollコマンドエラー: {e}")
+        await interaction.followup.send("ダイスロール中に予期せぬエラーが発生しました。", ephemeral=True)
+
+# /buttonrollコマンド：ボタン付きダイスロール機能
+@bot.tree.command(name="buttonroll", description="ボタンで何度でも振れるダイスパネルを作成します (例: 1d100)。")
+@app_commands.describe(diceroll="振りたいダイスの形式 (例: 1d100)")
+async def buttonroll_slash(interaction: discord.Interaction, diceroll: str):
+    
+    # 応答をdefer
+    await interaction.response.defer(thinking=False, ephemeral=False)
+    
+    try:
+        # 1. 入力チェック (roll_slashと同じ)
+        if 'd' not in diceroll.lower():
+            await interaction.followup.send("形式が正しくありません。", ephemeral=True)
+            return
+        
+        num_dice, num_sides = map(int, diceroll.lower().split('d'))
+        if num_dice <= 0 or num_sides <= 1 or num_dice > 20 or num_sides > 1000:
+             await interaction.followup.send("ダイス数/面数を確認してください。", ephemeral=True)
+             return
+             
+        # 2. パネルの作成
+        embed = discord.Embed(
+            title=f"🎲 {diceroll.upper()} ダイスロールパネル",
+            description="下のボタンを押すと、このダイスを振ることができます。",
+            color=discord.Color.gold()
+        )
+        
+        # 3. ボタンの設計図(View)を渡し、メッセージを投稿
+        await interaction.followup.send(embed=embed, view=RollButtonView(diceroll))
+        
+    except Exception as e:
+        await interaction.followup.send("ボタン作成中にエラーが発生しました。", ephemeral=True)
+
 # /helpコマンド：Botの機能一覧を表示
 @bot.tree.command(name="help", description="Botの全機能と使い方を表示します。")
 async def help_slash(interaction: discord.Interaction):
@@ -478,6 +589,8 @@ async def help_slash(interaction: discord.Interaction):
         ]),
         ("【その他・ユーティリティ】", [
             ("`/callmes`", "通話チャンネルへの参加を促します。（召集令状）"),
+            ("`/roll`", "ダイスを振ります。(例: 1d100)"),
+            ("`/buttonroll`", "ボタンダイスを出現させます。(例: 1d100)")
         ]),
     ]
     
@@ -647,6 +760,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
