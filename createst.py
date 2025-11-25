@@ -590,7 +590,7 @@ async def help_slash(interaction: discord.Interaction):
         ("【その他・ユーティリティ】", [
             ("`/callmes`", "通話チャンネルへの参加を促します。（召集令状）"),
             ("`/roll`", "ダイスを振ります。(例: 1d100)"),
-            ("`/buttonroll`", "ボタンダイスを出現させます。(例: 1d100)")
+            ("`/buttonroll`", "ボタンダイスを出現させます。(例: 1d100)"),
         ]),
     ]
     
@@ -760,6 +760,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
