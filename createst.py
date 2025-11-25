@@ -453,6 +453,55 @@ async def callmes_slash(interaction: discord.Interaction):
     # await interaction.followup.send("通話への参加を促すメッセージを送信しました。", ephemeral=True) 
     # ↑今回は、メッセージが一つで済むように、deferのephemeralをFalseにしています。
 
+# /helpコマンド：Botの機能一覧を表示
+@bot.tree.command(name="help", description="Botの全機能と使い方を表示します。")
+async def help_slash(interaction: discord.Interaction):
+    
+    # 💡 Botの「記憶」に、全てのコマンド情報を持たせる
+    #    このリストは、あなたの提供してくださった情報から作成しました。
+    commands_list = [
+        ("【AI・知識】賢者の知恵と戦略", [
+            ("`/gemini`", "ある程度のことを、豊かに説明。（安定版Gemini）"),
+            ("`/think`", "ほとんどのことにおいて、論理的に深く考える。（戦略家）"),
+            ("`/geminilite`", "超軽量なモデルに質問。（最速応答）"),
+        ]),
+        ("【創作・詩人】言葉と運勢", [
+            ("`/marukofu`", "知っていることを、ミックスして識る。（通常）"),
+            ("`/marukofulong`", "マルコフ連鎖の言葉を、より長く。（長文モード）"),
+            ("`/marukofushort`", "マルコフ連鎖による言葉を、よりコンパクトに。（短文モード）"),
+            ("`/omikuji`", "おみくじを引いて、あなたの運気を測ろう。"),
+        ]),
+        ("【管理者・運営】秩序と管理", [
+            ("`/reaction`", "リアクションでロールを付与/剥奪するパネルを作成します。"),
+            ("`/delete`", "指定した数のメッセージを一掃します。（最大100件）"),
+            ("`/say`", "Botが代わってメッセージを送信します。"),
+        ]),
+        ("【その他・ユーティリティ】", [
+            ("`/callmes`", "通話チャンネルへの参加を促します。（召集令状）"),
+        ]),
+    ]
+    
+    # Embedの作成
+    embed = discord.Embed(
+        title="🌟 Bot 機能一覧とコマンドリファレンス 🌟",
+        description="このBotは、知性、創造性、管理能力を兼ね備えています。\n以下の`/`コマンドで Bot の能力を呼び出してください。",
+        color=discord.Color.gold()
+    )
+    
+    # 各カテゴリをフィールドとしてEmbedに追加
+    for category_name, commands_in_category in commands_list:
+        field_value = ""
+        for command_name, description in commands_in_category:
+            field_value += f"**{command_name}**: {description}\n"
+        
+        embed.add_field(name=category_name, value=field_value, inline=False)
+        
+    # 最後の注釈
+    embed.set_footer(text="Botの運用には、利用規約とプライバシーポリシーが適用されます。")
+
+    # 応答は、全員に見えるようにする
+    await interaction.response.send_message(embed=embed, ephemeral=False)
+
 # /sayコマンド (特定のロールを持つ人のみ)
 @bot.tree.command(name="say", description="【管理者用】Botに代わってメッセージを送信します。")
 @app_commands.describe(message="Botに話させたい内容を入力してください。")
@@ -598,6 +647,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
