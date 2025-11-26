@@ -104,11 +104,8 @@ async def on_ready():
     try:
         synced = await bot.tree.sync()
         print(f"{len(synced)}個のスラッシュコマンドを同期しました。")
-        bot.add_view(RollButtonView()) # ◀️ 引数を完全に削除！
-        print("永続ボタンの設計図をDiscordに再登録しました。")
     except Exception as e:
         print(f"スラッシュコマンドの同期に失敗しました: {e}")
-        print(f"永続ボタンの再登録に失敗しました: {e}")
 
 # ======================= ここからがスラッシュコマンドです =======================
 
@@ -412,6 +409,37 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         await member.add_roles(role_to_add)
         print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
 
+    if message.author.id == bot.user.id and message.embeds and message.embeds[0].title.endswith("リアクションダイスパネル"):
+    # 1. Embedのフッターから隠された情報（DICEROLLとEMOJI）を抽出
+    footer_text = message.embeds[0].footer.text
+    if footer_text and 'DICEROLL:' in footer_text:
+        try:
+            # 2. 情報を解析
+            diceroll_info = footer_text.split('|')[0].split(':')[1].strip()
+            emoji_info = footer_text.split('|')[1].split(':')[1].strip()
+            
+            # 3. 押された絵文字が、パネルの絵文字と一致するかチェック
+            if str(payload.emoji) == emoji_info:
+                
+                # 4. ダイスロールの実行
+                num_dice, num_sides = map(int, diceroll_info.lower().split('d'))
+                results = [random.randint(1, num_sides) for _ in range(num_dice)]
+                total = sum(results)
+                
+                # 5. 結果を全員に見える形で投稿
+                result_message = (
+                    f"**{payload.member.display_name}** が {diceroll_info} を振って: **{total}** を出しました！\n"
+                    f"内訳: `{results}`"
+                )
+                await channel.send(result_message)
+                
+                # 6. 究極のリアクション作法：Botがリアクションを消して、次のロールを促す
+                await message.remove_reaction(payload.emoji, payload.member)
+                
+        except Exception as e:
+            print(f"ダイスロールリアクションエラー: {e}")
+            pass # エラーが出てもBotは止まらない
+
 # リアクションが「削除」されたことを監視するイベント
 @bot.event
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
@@ -492,28 +520,6 @@ async def callmes_slash(interaction: discord.Interaction):
     # await interaction.followup.send("通話への参加を促すメッセージを送信しました。", ephemeral=True) 
     # ↑今回は、メッセージが一つで済むように、deferのephemeralをFalseにしています。
 
-# 💡 永続化の合言葉となるカスタムIDの「頭文字」を定義
-ROLL_BUTTON_BASE_ID = "roll_btn_v1"
-
-class RollButtonView(discord.ui.View):
-    def __init__(self, diceroll: str = "1d2", timeout=180): # 💡 3分後に消えるように timeout を設定
-        super().__init__(timeout=timeout) 
-        
-        custom_id = f"{ROLL_BUTTON_BASE_ID}-{diceroll.lower()}"
-        
-        # ボタンを作成
-        self.add_item(
-            discord.ui.Button(
-                label=f"🎲 {diceroll.upper()} を振る", 
-                style=discord.ButtonStyle.primary, 
-                custom_id=custom_id 
-            )
-        )
-
-    # 💡 timeoutになったときに、ボタンを無効化する
-    async def on_timeout(self):
-        # メッセージの view を None にすることでボタンを非表示にする
-        await self.message.edit(view=None)
 
 # /rollコマンド：ダイスロール機能
 @bot.tree.command(name="roll", description="ダイスを振ります (例: 1d100, 3d6)。")
@@ -559,36 +565,43 @@ async def roll_slash(interaction: discord.Interaction, diceroll: str):
         await interaction.followup.send("ダイスロール中に予期せぬエラーが発生しました。", ephemeral=True)
 
 # /buttonrollコマンド：ボタン付きダイスロール機能
-@bot.tree.command(name="buttonroll", description="ボタンで何度でも振れるダイスパネルを作成します (例: 1d100)。")
-@app_commands.describe(diceroll="振りたいダイスの形式 (例: 1d100)")
-async def buttonroll_slash(interaction: discord.Interaction, diceroll: str):
+@bot.tree.command(name="reactionroll", description="リアクションを押すたびにダイスを振ります (例: 1d100)。")
+@app_commands.describe(diceroll="振りたいダイスの形式 (例: 1d100)", emoji="使用する絵文字 (例: 🎲, 🎯)")
+async def reactionroll_slash(interaction: discord.Interaction, diceroll: str, emoji: str = "🎲"):
     
-    # 応答をdefer
     await interaction.response.defer(thinking=False, ephemeral=False)
     
-    try:
-        # 1. 入力チェック (roll_slashと同じ)
-        if 'd' not in diceroll.lower():
-            await interaction.followup.send("形式が正しくありません。", ephemeral=True)
-            return
+    # 1. 入力チェック (roll_slashのロジックをそのまま使用)
+    if 'd' not in diceroll.lower():
+        await interaction.followup.send("ごめんなさい、入力形式が正しくありません。例: `1d100`", ephemeral=True)
+        return
         
+    try:
         num_dice, num_sides = map(int, diceroll.lower().split('d'))
         if num_dice <= 0 or num_sides <= 1 or num_dice > 20 or num_sides > 1000:
              await interaction.followup.send("ダイス数/面数を確認してください。", ephemeral=True)
              return
-             
-        # 2. パネルの作成
-        embed = discord.Embed(
-            title=f"🎲 {diceroll.upper()} ダイスロールパネル",
-            description="下のボタンを押すと、このダイスを振ることができます。",
-            color=discord.Color.gold()
-        )
+    except ValueError:
+        await interaction.followup.send("入力が整数ではありません。例: `1d6`", ephemeral=True)
+        return
         
-        # 3. ボタンの設計図(View)を渡し、メッセージを投稿
-        await interaction.followup.send(embed=embed, view=RollButtonView(diceroll))
-        
-    except Exception as e:
-        await interaction.followup.send("ボタン作成中にエラーが発生しました。", ephemeral=True)
+    # 2. 絵文字の無害化（Botがリアクションを付けられるように）
+    if emoji.startswith('<') and emoji.endswith('>') and ':' in emoji:
+        processed_emoji = emoji.split(':')[1] + ':' + emoji.split(':')[2].replace('>', '')
+    else:
+        processed_emoji = "".join(c for c in unicodedata.normalize("NFD", emoji) if unicodedata.category(c) != "Mn" and unicodedata.category(c) != "Me")
+
+    # 3. パネルの作成と投稿
+    embed = discord.Embed(
+        title=f"🎲 {diceroll.upper()} リアクションダイスパネル",
+        description=f"下の {emoji} でリアクションすると、**あなた専用**のダイスを振ることができます！",
+        color=discord.Color.gold()
+    )
+    # 💡 必要な情報をEmbedのフッターに隠して記憶させる（再起動対策）
+    embed.set_footer(text=f"DICEROLL:{diceroll.upper()}|EMOJI:{processed_emoji}")
+    
+    panel_message = await interaction.followup.send(embed=embed)
+    await panel_message.add_reaction(processed_emoji)
 
 # /helpコマンド：Botの機能一覧を表示
 @bot.tree.command(name="help", description="Botの全機能と使い方を表示します。")
@@ -722,68 +735,6 @@ async def delete_slash_error(interaction: discord.Interaction, error: app_comman
 
 # （/reactionコマンドのイベント関数の下、Bot起動の bot.run の上あたりに追加）
 
-@bot.event
-async def on_interaction(interaction: discord.Interaction):
-    # Botからのボタン/メニュー操作以外の interaction は無視
-    if interaction.type != discord.InteractionType.component:
-        return
-        
-    custom_id = interaction.data.get("custom_id")
-
-    # 1. 押されたのがダイスボタンかチェック
-    if custom_id.startswith(f"{ROLL_BUTTON_BASE_ID}-"):
-        
-        # 💡 ボタンの処理は、別の関数に委ねる
-        await handle_roll_button_interaction(interaction)
-        return
-
-    # 💡 その他のカスタムID（将来のボタンなど）も、ここで処理を追加できます。
-    
-    # 最後に、bot.process_application_commands(interaction) を呼び出すことで、
-    # 他のアプリケーションコマンド（スラッシュコマンド）の処理に続行させる
-    # ただし、今回は全てのスラッシュコマンドが @bot.tree.command で処理されているため、
-    # この呼び出しは省略し、ボタンの処理に専念します。
-
-
-# 💡 ボタンの処理本体（on_interactionから呼び出される）
-async def handle_roll_button_interaction(interaction: discord.Interaction):
-    
-    custom_id = interaction.data.get("custom_id")
-    
-    # 1. スピード違反対策
-    await interaction.response.defer()
-    
-    try:
-        # 2. IDからダイスの情報を抽出
-        diceroll = custom_id.split('-')[1] 
-        num_dice, num_sides = map(int, diceroll.lower().split('d'))
-        
-        # 3. ロールを実行
-        results = [random.randint(1, num_sides) for _ in range(num_dice)]
-        total = sum(results)
-        
-        # 4. Embedを準備
-        new_embed = interaction.message.embeds[0] 
-        
-        # 5. 結果を追記
-        result_message = (
-            f"**{interaction.user.display_name}** が {diceroll.upper()} を振った結果: **{total}**\n"
-            f"内訳: `{results}`"
-        )
-        new_embed.add_field(name=f"🎲 {interaction.user.display_name} の結果", value=result_message, inline=False)
-        new_embed.set_footer(text=f"最終実行者: {interaction.user.display_name} | {total}")
-        
-        # 6. 応答の編集 (Viewも更新)
-        await interaction.followup.edit_message(
-            message_id=interaction.message.id, 
-            embed=new_embed, 
-            view=RollButtonView(diceroll=diceroll, timeout=180) # 💡 新しいViewでメッセージを更新！
-        )
-
-    except Exception as e:
-        print(f"永続ボタン処理エラー: {e}")
-        await interaction.followup.send("ボタン処理中に予期せぬエラーが発生しました。", ephemeral=True)
-
 # メッセージが投稿されるたびに呼び出される「守護者」イベント
 @bot.event
 async def on_message(message):
@@ -851,3 +802,4 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
