@@ -496,17 +496,9 @@ async def callmes_slash(interaction: discord.Interaction):
 ROLL_BUTTON_BASE_ID = "roll_btn_v1"
 
 class RollButtonView(discord.ui.View):
-    # 💡 永続化の規約に則り、初期化に引数のダミーデフォルト値を設定
-    def __init__(self, diceroll: str = "1d2", timeout=None):
+    def __init__(self, diceroll: str = "1d2", timeout=180): # 💡 3分後に消えるように timeout を設定
         super().__init__(timeout=timeout) 
         
-        # 💡 __init__ でインスタンス変数に値を設定する（必須ではないが、構造を明確にする）
-        self.diceroll = diceroll 
-        
-        # 既存のボタンを削除し、新しいボタンを作成し直す
-        self.clear_items()
-        
-        # 💡 ボタンのカスタムIDに、ダイスの情報を含ませる！（これがBotの記憶となる）
         custom_id = f"{ROLL_BUTTON_BASE_ID}-{diceroll.lower()}"
         
         # ボタンを作成
@@ -514,64 +506,14 @@ class RollButtonView(discord.ui.View):
             discord.ui.Button(
                 label=f"🎲 {diceroll.upper()} を振る", 
                 style=discord.ButtonStyle.primary, 
-                custom_id=custom_id # IDに情報を埋め込む！
+                custom_id=custom_id 
             )
         )
-        
-    # 💡 コールバック本体（カスタムIDの解析と処理）
-async def interaction_check(self, interaction: discord.Interaction) -> bool:
-    # Botが再起動すると、この関数が呼ばれる
-    custom_id = interaction.data.get("custom_id")
 
-    # 1. カスタムIDがこのBotのボタンのものであるかチェック
-    if custom_id and custom_id.startswith(f"{ROLL_BUTTON_BASE_ID}-"):
-        
-        # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 究極のスピード違反対策：defer/editの作法 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-        # 応答の作法：3秒ルールを守るため、まず処理中であることを通知
-        await interaction.response.defer() 
-        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-        try:
-            # 1. IDからダイスの情報を抽出
-            # 例: roll_btn_v1-1d100 -> ['roll_btn_v1', '1d100'] -> [1]で '1d100'
-            diceroll = custom_id.split('-')[1] 
-            
-            # 2. ダイス情報を検証し、ロールを実行
-            num_dice, num_sides = map(int, diceroll.lower().split('d'))
-            
-            results = [random.randint(1, num_sides) for _ in range(num_dice)]
-            total = sum(results)
-            
-            # 3. ボタンを押したユーザーの結果を追記したEmbedを準備
-            # 💡 元のメッセージのEmbedをコピー
-            new_embed = interaction.message.embeds[0] 
-            
-            # 4. 追記する結果メッセージを構築
-            result_message = (
-                f"**{interaction.user.display_name}** が {diceroll.upper()} を振った結果: **{total}**\n"
-                f"内訳: `{results}`"
-            )
-            
-            # 5. Embedに新しいフィールドとして結果を追記
-            # 💡 フィールドとして追記することで、結果が積み重なる！
-            new_embed.add_field(name=f"🎲 {interaction.user.display_name} の結果", value=result_message, inline=False)
-            
-            # 6. フッターを更新
-            new_embed.set_footer(text=f"最終実行者: {interaction.user.display_name} | {total}")
-            
-            # 7. 応答の編集：元のメッセージを、新しいEmbedで上書きする！
-            # 💡 followup.edit_message を使うことで、deferで開始した応答を編集する
-            #    これにより、「新しいメッセージを投稿」と「元のメッセージを編集」という二重操作を回避
-            await interaction.followup.edit_message(message_id=interaction.message.id, embed=new_embed, view=self)
-
-        except Exception as e:
-            print(f"永続ボタン処理エラー: {e}")
-            # エラー時も、deferで開始した応答を、エラーメッセージで上書きする
-            await interaction.followup.send("ボタン処理中に予期せぬエラーが発生しました。", ephemeral=True)
-        
-        return True # 処理が成功したため、Trueを返す
-        
-    return False # 処理が失敗したため、Falseを返す
+    # 💡 timeoutになったときに、ボタンを無効化する
+    async def on_timeout(self):
+        # メッセージの view を None にすることでボタンを非表示にする
+        await self.message.edit(view=None)
 
 # /rollコマンド：ダイスロール機能
 @bot.tree.command(name="roll", description="ダイスを振ります (例: 1d100, 3d6)。")
@@ -780,6 +722,68 @@ async def delete_slash_error(interaction: discord.Interaction, error: app_comman
 
 # （/reactionコマンドのイベント関数の下、Bot起動の bot.run の上あたりに追加）
 
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    # Botからのボタン/メニュー操作以外の interaction は無視
+    if interaction.type != discord.InteractionType.component:
+        return
+        
+    custom_id = interaction.data.get("custom_id")
+
+    # 1. 押されたのがダイスボタンかチェック
+    if custom_id.startswith(f"{ROLL_BUTTON_BASE_ID}-"):
+        
+        # 💡 ボタンの処理は、別の関数に委ねる
+        await handle_roll_button_interaction(interaction)
+        return
+
+    # 💡 その他のカスタムID（将来のボタンなど）も、ここで処理を追加できます。
+    
+    # 最後に、bot.process_application_commands(interaction) を呼び出すことで、
+    # 他のアプリケーションコマンド（スラッシュコマンド）の処理に続行させる
+    # ただし、今回は全てのスラッシュコマンドが @bot.tree.command で処理されているため、
+    # この呼び出しは省略し、ボタンの処理に専念します。
+
+
+# 💡 ボタンの処理本体（on_interactionから呼び出される）
+async def handle_roll_button_interaction(interaction: discord.Interaction):
+    
+    custom_id = interaction.data.get("custom_id")
+    
+    # 1. スピード違反対策
+    await interaction.response.defer()
+    
+    try:
+        # 2. IDからダイスの情報を抽出
+        diceroll = custom_id.split('-')[1] 
+        num_dice, num_sides = map(int, diceroll.lower().split('d'))
+        
+        # 3. ロールを実行
+        results = [random.randint(1, num_sides) for _ in range(num_dice)]
+        total = sum(results)
+        
+        # 4. Embedを準備
+        new_embed = interaction.message.embeds[0] 
+        
+        # 5. 結果を追記
+        result_message = (
+            f"**{interaction.user.display_name}** が {diceroll.upper()} を振った結果: **{total}**\n"
+            f"内訳: `{results}`"
+        )
+        new_embed.add_field(name=f"🎲 {interaction.user.display_name} の結果", value=result_message, inline=False)
+        new_embed.set_footer(text=f"最終実行者: {interaction.user.display_name} | {total}")
+        
+        # 6. 応答の編集 (Viewも更新)
+        await interaction.followup.edit_message(
+            message_id=interaction.message.id, 
+            embed=new_embed, 
+            view=RollButtonView(diceroll=diceroll, timeout=180) # 💡 新しいViewでメッセージを更新！
+        )
+
+    except Exception as e:
+        print(f"永続ボタン処理エラー: {e}")
+        await interaction.followup.send("ボタン処理中に予期せぬエラーが発生しました。", ephemeral=True)
+
 # メッセージが投稿されるたびに呼び出される「守護者」イベント
 @bot.event
 async def on_message(message):
@@ -844,34 +848,6 @@ async def on_message(message):
 
 
 
+
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
