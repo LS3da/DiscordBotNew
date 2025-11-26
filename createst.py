@@ -104,8 +104,11 @@ async def on_ready():
     try:
         synced = await bot.tree.sync()
         print(f"{len(synced)}個のスラッシュコマンドを同期しました。")
+        bot.add_view(RollButtonView(diceroll="1d2")) # dicerollはダミー値。クラスのインスタンス化に必要
+        print("永続ボタンの設計図をDiscordに再登録しました。")
     except Exception as e:
         print(f"スラッシュコマンドの同期に失敗しました: {e}")
+        print(f"永続ボタンの再登録に失敗しました: {e}")
 
 # ======================= ここからがスラッシュコマンドです =======================
 
@@ -489,6 +492,68 @@ async def callmes_slash(interaction: discord.Interaction):
     # await interaction.followup.send("通話への参加を促すメッセージを送信しました。", ephemeral=True) 
     # ↑今回は、メッセージが一つで済むように、deferのephemeralをFalseにしています。
 
+# 💡 永続化の合言葉となるカスタムIDの「頭文字」を定義
+ROLL_BUTTON_BASE_ID = "roll_btn_v1"
+
+class RollButtonView(discord.ui.View):
+    def __init__(self, diceroll: str, timeout=None):
+        super().__init__(timeout=timeout) 
+        
+        # 💡 diceroll をカスタムIDに埋め込むことで、再起動後も情報を保持
+        self.diceroll = diceroll 
+        self.num_dice, self.num_sides = map(int, diceroll.lower().split('d'))
+        
+        # 既存のボタンを削除し、新しいボタンを作成し直す
+        self.clear_items()
+        
+        # 💡 ボタンのカスタムIDに、ダイスの情報を含ませる！
+        custom_id = f"{ROLL_BUTTON_BASE_ID}-{diceroll.lower()}"
+        
+        # ボタンを作成
+        self.add_item(
+            discord.ui.Button(
+                label=f"🎲 {diceroll.upper()} を振る", 
+                style=discord.ButtonStyle.primary, 
+                custom_id=custom_id # IDに情報を埋め込む！
+            )
+        )
+        
+        
+    # 💡 コールバック本体を、interaction からカスタムIDを解析するように変更
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Botが再起動すると、この関数が呼ばれる
+        custom_id = interaction.data.get("custom_id")
+
+        if custom_id and custom_id.startswith(f"{ROLL_BUTTON_BASE_ID}-"):
+            try:
+                # 1. IDからダイスの情報を抽出
+                self.diceroll = custom_id.split('-')[1]
+                self.num_dice, self.num_sides = map(int, self.diceroll.lower().split('d'))
+                
+                # 2. ロールを実行 (既存のロジックを再利用)
+                results = [random.randint(1, self.num_sides) for _ in range(self.num_dice)]
+                total = sum(results)
+                
+                # 3. 結果の表示（全員に見えるように）
+                message = (
+                    f"**{interaction.user.display_name}** が {self.diceroll.upper()} を振った結果: **{total}**\n"
+                    f"内訳: `{results}`"
+                )
+                await interaction.response.send_message(message)
+                
+                # 4. ボタンのメッセージを、誰が最後に振ったか追記して更新
+                original_embed = interaction.message.embeds[0]
+                original_embed.set_footer(text=f"最終実行者: {interaction.user.display_name} | {total}")
+                await interaction.message.edit(embed=original_embed, view=self)
+
+            except Exception as e:
+                print(f"永続ボタン処理エラー: {e}")
+                await interaction.response.send_message("ボタン処理中に予期せぬエラーが発生しました。", ephemeral=True)
+            
+            return True # 処理が成功したため、Trueを返す
+            
+        return False # 処理が失敗したため、Falseを返す
+
 # /rollコマンド：ダイスロール機能
 @bot.tree.command(name="roll", description="ダイスを振ります (例: 1d100, 3d6)。")
 @app_commands.describe(diceroll="振りたいダイスの形式 (例: 1d100)")
@@ -758,8 +823,11 @@ async def on_message(message):
             # 5. 処理を終了 (一つでも禁止ワードが見つかれば、メッセージは削除済みなのでOK)
             return
 
+
+
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
