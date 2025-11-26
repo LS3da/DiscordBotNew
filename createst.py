@@ -520,44 +520,58 @@ class RollButtonView(discord.ui.View):
         
     # 💡 コールバック本体（カスタムIDの解析と処理）
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        # Botが再起動したときに、この関数が呼ばれる
-        custom_id = interaction.data.get("custom_id")
+    # Botが再起動すると、この関数が呼ばれる
+    custom_id = interaction.data.get("custom_id")
 
-        # 1. カスタムIDがこのBotのボタンのものであるかチェック
-        if custom_id and custom_id.startswith(f"{ROLL_BUTTON_BASE_ID}-"):
-            try:
-                # 2. IDからダイスの情報を抽出
-                # 例: roll_btn_v1-1d100 -> ['roll_btn_v1', '1d100'] -> [1]で '1d100'
-                diceroll = custom_id.split('-')[1] 
-                
-                # 3. ダイス情報を検証し、ロールを実行
-                num_dice, num_sides = map(int, diceroll.lower().split('d'))
-                
-                results = [random.randint(1, num_sides) for _ in range(num_dice)]
-                total = sum(results)
-                
-                # 4. 結果の表示（全員に見えるように）
-                message = (
-                    f"**{interaction.user.display_name}** が {diceroll.upper()} を振った結果: **{total}**\n"
-                    f"内訳: `{results}`"
-                )
-                await interaction.response.send_message(message)
-                
-                # 5. ボタンのメッセージを、誰が最後に振ったか追記して更新
-                original_embed = interaction.message.embeds[0]
-                original_embed.set_footer(text=f"最終実行者: {interaction.user.display_name} | {total}")
-                
-                # 💡 view=self で、同じボタンを付けたままメッセージを更新する
-                await interaction.message.edit(embed=original_embed, view=self) 
+    # 1. カスタムIDがこのBotのボタンのものであるかチェック
+    if custom_id and custom_id.startswith(f"{ROLL_BUTTON_BASE_ID}-"):
+        
+        # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 究極のスピード違反対策：defer/editの作法 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+        # 応答の作法：3秒ルールを守るため、まず処理中であることを通知
+        await interaction.response.defer() 
+        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-            except Exception as e:
-                print(f"永続ボタン処理エラー: {e}")
-                # エラー時も、必ずinteraction.response.send_messageで応答する
-                await interaction.response.send_message("ボタン処理中に予期せぬエラーが発生しました。", ephemeral=True)
+        try:
+            # 1. IDからダイスの情報を抽出
+            # 例: roll_btn_v1-1d100 -> ['roll_btn_v1', '1d100'] -> [1]で '1d100'
+            diceroll = custom_id.split('-')[1] 
             
-            return True # 処理が成功したため、Trueを返す
+            # 2. ダイス情報を検証し、ロールを実行
+            num_dice, num_sides = map(int, diceroll.lower().split('d'))
             
-        return False # 処理が失敗したため、Falseを返す
+            results = [random.randint(1, num_sides) for _ in range(num_dice)]
+            total = sum(results)
+            
+            # 3. ボタンを押したユーザーの結果を追記したEmbedを準備
+            # 💡 元のメッセージのEmbedをコピー
+            new_embed = interaction.message.embeds[0] 
+            
+            # 4. 追記する結果メッセージを構築
+            result_message = (
+                f"**{interaction.user.display_name}** が {diceroll.upper()} を振った結果: **{total}**\n"
+                f"内訳: `{results}`"
+            )
+            
+            # 5. Embedに新しいフィールドとして結果を追記
+            # 💡 フィールドとして追記することで、結果が積み重なる！
+            new_embed.add_field(name=f"🎲 {interaction.user.display_name} の結果", value=result_message, inline=False)
+            
+            # 6. フッターを更新
+            new_embed.set_footer(text=f"最終実行者: {interaction.user.display_name} | {total}")
+            
+            # 7. 応答の編集：元のメッセージを、新しいEmbedで上書きする！
+            # 💡 followup.edit_message を使うことで、deferで開始した応答を編集する
+            #    これにより、「新しいメッセージを投稿」と「元のメッセージを編集」という二重操作を回避
+            await interaction.followup.edit_message(message_id=interaction.message.id, embed=new_embed, view=self)
+
+        except Exception as e:
+            print(f"永続ボタン処理エラー: {e}")
+            # エラー時も、deferで開始した応答を、エラーメッセージで上書きする
+            await interaction.followup.send("ボタン処理中に予期せぬエラーが発生しました。", ephemeral=True)
+        
+        return True # 処理が成功したため、Trueを返す
+        
+    return False # 処理が失敗したため、Falseを返す
 
 # /rollコマンド：ダイスロール機能
 @bot.tree.command(name="roll", description="ダイスを振ります (例: 1d100, 3d6)。")
@@ -832,6 +846,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
