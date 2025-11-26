@@ -104,7 +104,7 @@ async def on_ready():
     try:
         synced = await bot.tree.sync()
         print(f"{len(synced)}個のスラッシュコマンドを同期しました。")
-        bot.add_view(RollButtonView(diceroll="1d2")) # dicerollはダミー値。クラスのインスタンス化に必要
+        bot.add_view(RollButtonView()) # ◀️ 引数を完全に削除！
         print("永続ボタンの設計図をDiscordに再登録しました。")
     except Exception as e:
         print(f"スラッシュコマンドの同期に失敗しました: {e}")
@@ -496,8 +496,8 @@ async def callmes_slash(interaction: discord.Interaction):
 ROLL_BUTTON_BASE_ID = "roll_btn_v1"
 
 class RollButtonView(discord.ui.View):
-    def __init__(self, diceroll: str, timeout=None):
-        super().__init__(timeout=timeout) 
+    def __init__(self, diceroll: str = "1d2", timeout=None): # ◀️ 初期化の引数にダミーのデフォルト値を設定
+        super().__init__(timeout=timeout)
         
         # 💡 diceroll をカスタムIDに埋め込むことで、再起動後も情報を保持
         self.diceroll = diceroll 
@@ -517,7 +517,13 @@ class RollButtonView(discord.ui.View):
                 custom_id=custom_id # IDに情報を埋め込む！
             )
         )
+
+    @classmethod
+    def get_custom_id(cls, diceroll: str) -> str:
+        return f"{ROLL_BUTTON_BASE_ID}-{diceroll.lower()}"
         
+    # 💡 ボタンの処理は interaction_check で行うため、これはそのまま
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
         
     # 💡 コールバック本体を、interaction からカスタムIDを解析するように変更
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -827,6 +833,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
