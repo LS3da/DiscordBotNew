@@ -519,7 +519,7 @@ class RollButtonView(discord.ui.View):
         )
         
     # 💡 コールバック本体（カスタムIDの解析と処理）
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+async def interaction_check(self, interaction: discord.Interaction) -> bool:
     # Botが再起動すると、この関数が呼ばれる
     custom_id = interaction.data.get("custom_id")
 
@@ -846,6 +846,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
