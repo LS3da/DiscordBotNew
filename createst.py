@@ -410,35 +410,35 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
 
     if message.author.id == bot.user.id and message.embeds and message.embeds[0].title.endswith("リアクションダイスパネル"):
-    # 1. Embedのフッターから隠された情報（DICEROLLとEMOJI）を抽出
-    footer_text = message.embeds[0].footer.text
-    if footer_text and 'DICEROLL:' in footer_text:
-        try:
-            # 2. 情報を解析
-            diceroll_info = footer_text.split('|')[0].split(':')[1].strip()
-            emoji_info = footer_text.split('|')[1].split(':')[1].strip()
-            
-            # 3. 押された絵文字が、パネルの絵文字と一致するかチェック
-            if str(payload.emoji) == emoji_info:
+        # 1. Embedのフッターから隠された情報（DICEROLLとEMOJI）を抽出
+        footer_text = message.embeds[0].footer.text
+        if footer_text and 'DICEROLL:' in footer_text:
+            try:
+                # 2. 情報を解析
+                diceroll_info = footer_text.split('|')[0].split(':')[1].strip()
+                emoji_info = footer_text.split('|')[1].split(':')[1].strip()
                 
-                # 4. ダイスロールの実行
-                num_dice, num_sides = map(int, diceroll_info.lower().split('d'))
-                results = [random.randint(1, num_sides) for _ in range(num_dice)]
-                total = sum(results)
-                
-                # 5. 結果を全員に見える形で投稿
-                result_message = (
-                    f"**{payload.member.display_name}** が {diceroll_info} を振って: **{total}** を出しました！\n"
-                    f"内訳: `{results}`"
-                )
-                await channel.send(result_message)
-                
-                # 6. 究極のリアクション作法：Botがリアクションを消して、次のロールを促す
-                await message.remove_reaction(payload.emoji, payload.member)
-                
-        except Exception as e:
-            print(f"ダイスロールリアクションエラー: {e}")
-            pass # エラーが出てもBotは止まらない
+                # 3. 押された絵文字が、パネルの絵文字と一致するかチェック
+                if str(payload.emoji) == emoji_info:
+                    
+                    # 4. ダイスロールの実行
+                    num_dice, num_sides = map(int, diceroll_info.lower().split('d'))
+                    results = [random.randint(1, num_sides) for _ in range(num_dice)]
+                    total = sum(results)
+                    
+                    # 5. 結果を全員に見える形で投稿
+                    result_message = (
+                        f"**{payload.member.display_name}** が {diceroll_info} を振って: **{total}** を出しました！\n"
+                        f"内訳: `{results}`"
+                    )
+                    await channel.send(result_message)
+                    
+                    # 6. 究極のリアクション作法：Botがリアクションを消して、次のロールを促す
+                    await message.remove_reaction(payload.emoji, payload.member)
+                    
+            except Exception as e:
+                print(f"ダイスロールリアクションエラー: {e}")
+                pass # エラーが出てもBotは止まらない
 
 # リアクションが「削除」されたことを監視するイベント
 @bot.event
@@ -802,4 +802,5 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
