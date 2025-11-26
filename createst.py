@@ -490,10 +490,10 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     member = guild.get_member(payload.user_id)
 
     if message.author.id == bot.user.id and message.embeds and message.embeds[0].title.endswith("リアクションダイスパネル"):
-    # ダイスパネルの場合、リアクションが外されたことは無視し、
-    # 処理をon_raw_reaction_addに一本化するため、ここでは何もしません。
-    # on_raw_reaction_remove はロール処理に専念させます。
-    pass
+        # ダイスパネルの場合、リアクションが外されたことは無視し、
+        # 処理をon_raw_reaction_addに一本化するため、ここでは何もしません。
+        # on_raw_reaction_remove はロール処理に専念させます。
+        pass
     
     if role_to_remove and member:
         # メンバーからロールを剥奪！
@@ -809,6 +809,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
