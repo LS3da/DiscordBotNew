@@ -408,6 +408,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         # メンバーにロールを付与！
         await member.add_roles(role_to_add)
         print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
+        return
 
     if message.author.id == bot.user.id and message.embeds and message.embeds[0].title.endswith("リアクションダイスパネル"):
         # 1. Embedのフッターから隠された情報（DICEROLLとEMOJI）を抽出
@@ -487,6 +488,12 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     
     role_to_remove = discord.utils.get(guild.roles, name=role_name)
     member = guild.get_member(payload.user_id)
+
+    if message.author.id == bot.user.id and message.embeds and message.embeds[0].title.endswith("リアクションダイスパネル"):
+    # ダイスパネルの場合、リアクションが外されたことは無視し、
+    # 処理をon_raw_reaction_addに一本化するため、ここでは何もしません。
+    # on_raw_reaction_remove はロール処理に専念させます。
+    pass
     
     if role_to_remove and member:
         # メンバーからロールを剥奪！
@@ -802,5 +809,6 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
