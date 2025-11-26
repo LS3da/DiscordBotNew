@@ -496,17 +496,17 @@ async def callmes_slash(interaction: discord.Interaction):
 ROLL_BUTTON_BASE_ID = "roll_btn_v1"
 
 class RollButtonView(discord.ui.View):
-    def __init__(self, diceroll: str = "1d2", timeout=None): # ◀️ 初期化の引数にダミーのデフォルト値を設定
-        super().__init__(timeout=timeout)
+    # 💡 永続化の規約に則り、初期化に引数のダミーデフォルト値を設定
+    def __init__(self, diceroll: str = "1d2", timeout=None):
+        super().__init__(timeout=timeout) 
         
-        # 💡 diceroll をカスタムIDに埋め込むことで、再起動後も情報を保持
+        # 💡 __init__ でインスタンス変数に値を設定する（必須ではないが、構造を明確にする）
         self.diceroll = diceroll 
-        self.num_dice, self.num_sides = map(int, diceroll.lower().split('d'))
         
         # 既存のボタンを削除し、新しいボタンを作成し直す
         self.clear_items()
         
-        # 💡 ボタンのカスタムIDに、ダイスの情報を含ませる！
+        # 💡 ボタンのカスタムIDに、ダイスの情報を含ませる！（これがBotの記憶となる）
         custom_id = f"{ROLL_BUTTON_BASE_ID}-{diceroll.lower()}"
         
         # ボタンを作成
@@ -517,43 +517,42 @@ class RollButtonView(discord.ui.View):
                 custom_id=custom_id # IDに情報を埋め込む！
             )
         )
-
-    @classmethod
-    def get_custom_id(cls, diceroll: str) -> str:
-        return f"{ROLL_BUTTON_BASE_ID}-{diceroll.lower()}"
         
-    # 💡 ボタンの処理は interaction_check で行うため、これはそのまま
+    # 💡 コールバック本体（カスタムIDの解析と処理）
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        
-    # 💡 コールバック本体を、interaction からカスタムIDを解析するように変更
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        # Botが再起動すると、この関数が呼ばれる
+        # Botが再起動したときに、この関数が呼ばれる
         custom_id = interaction.data.get("custom_id")
 
+        # 1. カスタムIDがこのBotのボタンのものであるかチェック
         if custom_id and custom_id.startswith(f"{ROLL_BUTTON_BASE_ID}-"):
             try:
-                # 1. IDからダイスの情報を抽出
-                self.diceroll = custom_id.split('-')[1]
-                self.num_dice, self.num_sides = map(int, self.diceroll.lower().split('d'))
+                # 2. IDからダイスの情報を抽出
+                # 例: roll_btn_v1-1d100 -> ['roll_btn_v1', '1d100'] -> [1]で '1d100'
+                diceroll = custom_id.split('-')[1] 
                 
-                # 2. ロールを実行 (既存のロジックを再利用)
-                results = [random.randint(1, self.num_sides) for _ in range(self.num_dice)]
+                # 3. ダイス情報を検証し、ロールを実行
+                num_dice, num_sides = map(int, diceroll.lower().split('d'))
+                
+                results = [random.randint(1, num_sides) for _ in range(num_dice)]
                 total = sum(results)
                 
-                # 3. 結果の表示（全員に見えるように）
+                # 4. 結果の表示（全員に見えるように）
                 message = (
-                    f"**{interaction.user.display_name}** が {self.diceroll.upper()} を振った結果: **{total}**\n"
+                    f"**{interaction.user.display_name}** が {diceroll.upper()} を振った結果: **{total}**\n"
                     f"内訳: `{results}`"
                 )
                 await interaction.response.send_message(message)
                 
-                # 4. ボタンのメッセージを、誰が最後に振ったか追記して更新
+                # 5. ボタンのメッセージを、誰が最後に振ったか追記して更新
                 original_embed = interaction.message.embeds[0]
                 original_embed.set_footer(text=f"最終実行者: {interaction.user.display_name} | {total}")
-                await interaction.message.edit(embed=original_embed, view=self)
+                
+                # 💡 view=self で、同じボタンを付けたままメッセージを更新する
+                await interaction.message.edit(embed=original_embed, view=self) 
 
             except Exception as e:
                 print(f"永続ボタン処理エラー: {e}")
+                # エラー時も、必ずinteraction.response.send_messageで応答する
                 await interaction.response.send_message("ボタン処理中に予期せぬエラーが発生しました。", ephemeral=True)
             
             return True # 処理が成功したため、Trueを返す
@@ -833,6 +832,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
