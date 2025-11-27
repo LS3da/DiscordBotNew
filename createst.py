@@ -356,9 +356,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     # --------------------------------------------------------------------
     # 💡 仕分けロジック 1: 【リアクションロール】の処理
     # --------------------------------------------------------------------
-    # --------------------------------------------------------------------
-    # 💡 仕分けロジック 1: 【リアクションロール】の処理
-    # --------------------------------------------------------------------
     if embed_title == "【リアクションロール】":
         
         # ロール名抽出ロジック（変更なし）
@@ -373,23 +370,23 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 
         role_to_add = discord.utils.get(guild.roles, name=role_name)
         
-        # 💡 メンバーが既にロールを持っているかチェック (二重付与対策)
+        # 💡 メンバーが既にロールを持っていない場合のみ付与 (二重付与対策)
         if role_to_add and member and role_to_add not in member.roles:
             
             # メンバーにロールを付与！
             await member.add_roles(role_to_add)
             print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
-            # 削除処理があるとロールを再度消してしまうため、削除。
+
+            # ❌ Botがリアクションを消す処理を、ここで完全に削除する！
+            # ユーザーがリアクションを残すことで、自発的にロールを外すことができるようにする。
+            
             return # 役割付与が完了したので、ここで処理を終了
 
-        # 💡 ロールを既に持っている場合も、リアクションは消してあげる（ただし、Botのリアクションはそのまま残る）
-        elif role_to_add and member and role_to_add in member.roles:
-            try:
-                # ユーザーが再度リアクションを付けてきた場合、リアクションだけ消してあげる
-                await message.remove_reaction(payload.emoji, payload.member)
-            except discord.Forbidden:
-                pass
-            return
+        # 💡 ロールを既に持っている場合も、何もしない（リアクションはそのまま残す）
+        #    Botは、ロール付与ができない時は、エラーを出さず、静かに処理を終了します。
+        
+        # 処理が不要な場合も、ここで終了させる
+        return
 
     # --------------------------------------------------------------------
     # 💡 仕分けロジック 2: 【ダイスロール】の処理
@@ -788,6 +785,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
