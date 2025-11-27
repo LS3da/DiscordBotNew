@@ -453,7 +453,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                 return
         except discord.NotFound:
             return
-
+    
         embed_title = message.embeds[0].title
         
         # --------------------------------------------------------------------
@@ -461,7 +461,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         # --------------------------------------------------------------------
         if embed_title == "【リアクションロール】":
             
-            # ロール名抽出ロジック（変更なし）
+            # ロール名抽出ロジック（省略）
             try:
                 import re
                 description = message.embeds[0].description
@@ -470,7 +470,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                 role_name = role_match.group(1) 
             except Exception:
                 return 
-
+    
             role_to_remove = discord.utils.get(guild.roles, name=role_name)
             
             if role_to_remove and member:
@@ -478,13 +478,14 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                 await member.remove_roles(role_to_remove)
                 print(f"{member.display_name} から @{role_to_remove.name} を剥奪しました。")
                 return # 役割剥奪が完了したので、ここで処理を終了
-            
+                
         # --------------------------------------------------------------------
         # 💡 仕分けロジック 2: 【ダイスロール】の処理
         # --------------------------------------------------------------------
-        # ダイスパネルの場合、リアクションが外されたことは、無視する（処理不要）
-            if "リアクションダイスパネル" in embed_title: 
-                return
+        # 💡 インデントを戻し、最初の if と同じレベルにすることで、独立したチェックにする
+        if "リアクションダイスパネル" in embed_title: 
+            # ダイスパネルの場合、リアクションが外されたことは、無視する（処理不要）
+            return
 
 # /callmesコマンド：通話への参加を促す（召集令状）
 @bot.tree.command(name="callmes", description="通話チャンネルへの参加を促します。")
@@ -789,6 +790,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
