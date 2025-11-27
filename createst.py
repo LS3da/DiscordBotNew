@@ -428,64 +428,64 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                 print(f"ダイスロールリアクションエラー: {e}")
                 pass
                 
-    # リアクションが「削除」されたことを監視するイベント
-    @bot.event
-    async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
-        
-        # 1. 必須チェックとデータ取得（このデータ取得は絶対に省略できません！）
-        if payload.user_id == bot.user.id:
+# リアクションが「削除」されたことを監視するイベント
+@bot.event
+async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
+    
+    # 1. 必須チェックとデータ取得（このデータ取得は絶対に省略できません！）
+    if payload.user_id == bot.user.id:
+        return
+
+    guild = bot.get_guild(payload.guild_id)
+    if not guild: return
+    
+    # 💡 on_raw_reaction_remove では member の情報は不確実なので、get_memberで取得する
+    member = guild.get_member(payload.user_id) 
+    if not member: return # メンバーがサーバーにいない場合は処理を中断
+
+    channel = guild.get_channel(payload.channel_id)
+    if not channel: return
+    
+    try:
+        # メッセージを取得（Botの投稿かチェック）
+        message = await channel.fetch_message(payload.message_id)
+        if message.author.id != bot.user.id or not message.embeds:
             return
+    except discord.NotFound:
+        return
+
+    embed_title = message.embeds[0].title
     
-        guild = bot.get_guild(payload.guild_id)
-        if not guild: return
+    # --------------------------------------------------------------------
+    # 💡 仕分けロジック 1: 【リアクションロール】の処理
+    # --------------------------------------------------------------------
+    if embed_title == "【リアクションロール】":
         
-        # 💡 on_raw_reaction_remove では member の情報は不確実なので、get_memberで取得する
-        member = guild.get_member(payload.user_id) 
-        if not member: return # メンバーがサーバーにいない場合は処理を中断
-    
-        channel = guild.get_channel(payload.channel_id)
-        if not channel: return
-        
+        # ロール名抽出ロジック（省略）
         try:
-            # メッセージを取得（Botの投稿かチェック）
-            message = await channel.fetch_message(payload.message_id)
-            if message.author.id != bot.user.id or not message.embeds:
-                return
-        except discord.NotFound:
-            return
-    
-        embed_title = message.embeds[0].title
+            import re
+            description = message.embeds[0].description
+            role_match = re.search(r'`@([^`]+)`', description)
+            if not role_match: return 
+            role_name = role_match.group(1) 
+        except Exception:
+            return 
+
+        role_to_remove = discord.utils.get(guild.roles, name=role_name)
         
-        # --------------------------------------------------------------------
-        # 💡 仕分けロジック 1: 【リアクションロール】の処理
-        # --------------------------------------------------------------------
-        if embed_title == "【リアクションロール】":
+        if role_to_remove and member:
+            # 💡 メンバーからロールを剥奪！
+            await member.remove_roles(role_to_remove)
+            print(f"{member.display_name} から @{role_to_remove.name} を剥奪しました。")
+            return # 役割剥奪が完了したので、ここで処理を終了
             
-            # ロール名抽出ロジック（省略）
-            try:
-                import re
-                description = message.embeds[0].description
-                role_match = re.search(r'`@([^`]+)`', description)
-                if not role_match: return 
-                role_name = role_match.group(1) 
-            except Exception:
-                return 
-    
-            role_to_remove = discord.utils.get(guild.roles, name=role_name)
-            
-            if role_to_remove and member:
-                # 💡 メンバーからロールを剥奪！
-                await member.remove_roles(role_to_remove)
-                print(f"{member.display_name} から @{role_to_remove.name} を剥奪しました。")
-                return # 役割剥奪が完了したので、ここで処理を終了
-                
-        # --------------------------------------------------------------------
-        # 💡 仕分けロジック 2: 【ダイスロール】の処理
-        # --------------------------------------------------------------------
-        # 💡 インデントを戻し、最初の if と同じレベルにすることで、独立したチェックにする
-        if "リアクションダイスパネル" in embed_title: 
-            # ダイスパネルの場合、リアクションが外されたことは、無視する（処理不要）
-            return
+    # --------------------------------------------------------------------
+    # 💡 仕分けロジック 2: 【ダイスロール】の処理
+    # --------------------------------------------------------------------
+    # 💡 インデントを戻し、最初の if と同じレベルにすることで、独立したチェックにする
+    if "リアクションダイスパネル" in embed_title: 
+        # ダイスパネルの場合、リアクションが外されたことは、無視する（処理不要）
+        return
 
 # /callmesコマンド：通話への参加を促す（召集令状）
 @bot.tree.command(name="callmes", description="通話チャンネルへの参加を促します。")
@@ -790,6 +790,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
