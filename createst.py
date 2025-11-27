@@ -265,27 +265,6 @@ async def marukofulong_slash(interaction: discord.Interaction):
         await interaction.followup.send(long_sentence)
     else:
         await interaction.followup.send("すまん、学習データに基づいて長い文章をうまく生成できなかった。")
-
-# 💡 ボタンを押されたときに実行される設計図（クラス）
-class RollButtonView(discord.ui.View):
-    def __init__(self, diceroll: str):
-        super().__init__(timeout=None) # タイムアウトなしで永遠にボタンを残す
-        self.diceroll = diceroll
-        self.num_dice, self.num_sides = map(int, diceroll.lower().split('d'))
-        
-    # 💡 このメソッドが、ボタンを押されたときに実行される本体
-    @discord.ui.button(label="🎲 ダイスを振る", style=discord.ButtonStyle.primary, custom_id="persistent_roll_button")
-    async def button_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
-        
-        # 1. ロールを実行
-        results = [random.randint(1, self.num_sides) for _ in range(self.num_dice)]
-        total = sum(results)
-        
-        # 2. 結果の表示（全員に見えるように）
-        message = (
-            f"**{interaction.user.display_name}** が {self.diceroll.upper()} を振った結果: **{total}**\n"
-            f"内訳: `{results}`"
-        )
         
         # 3. チャンネルに投稿
         await interaction.response.send_message(message)
@@ -295,11 +274,6 @@ class RollButtonView(discord.ui.View):
         original_embed.set_footer(text=f"最終実行者: {interaction.user.display_name} | {total}")
         await interaction.message.edit(embed=original_embed, view=self)
 
-# 💡 Botが再起動したときにボタンを復活させる処理
-# @bot.event
-# async def on_ready_for_button_revival():
-#    bot.add_view(RollButtonView("1d6")) # 例: 起動時によく使うボタンを登録しておくと、ボタンが生き返る
-#    pass
 
 # /omikujiコマンド
 @bot.tree.command(name="omikuji", description="おみくじを引いて、あなたの運気を測ろう。")
@@ -571,44 +545,86 @@ async def roll_slash(interaction: discord.Interaction, diceroll: str):
         print(f"Rollコマンドエラー: {e}")
         await interaction.followup.send("ダイスロール中に予期せぬエラーが発生しました。", ephemeral=True)
 
-# /buttonrollコマンド：ボタン付きダイスロール機能
-@bot.tree.command(name="reactionroll", description="リアクションを押すたびにダイスを振ります (例: 1d100)。")
-@app_commands.describe(diceroll="振りたいダイスの形式 (例: 1d100)", emoji="使用する絵文字 (例: 🎲, 🎯)")
-async def reactionroll_slash(interaction: discord.Interaction, diceroll: str, emoji: str = "🎲"):
-    
-    await interaction.response.defer(thinking=False, ephemeral=False)
-    
-    # 1. 入力チェック (roll_slashのロジックをそのまま使用)
-    if 'd' not in diceroll.lower():
-        await interaction.followup.send("ごめんなさい、入力形式が正しくありません。例: `1d100`", ephemeral=True)
+# リアクションが「追加」されたことを監視するイベント
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    # Bot自身のリアクションは無視する
+    if payload.user_id == bot.user.id:
         return
-        
-    try:
-        num_dice, num_sides = map(int, diceroll.lower().split('d'))
-        if num_dice <= 0 or num_sides <= 1 or num_dice > 20 or num_sides > 1000:
-             await interaction.followup.send("ダイス数/面数を確認してください。", ephemeral=True)
-             return
-    except ValueError:
-        await interaction.followup.send("入力が整数ではありません。例: `1d6`", ephemeral=True)
-        return
-        
-    # 2. 絵文字の無害化（Botがリアクションを付けられるように）
-    if emoji.startswith('<') and emoji.endswith('>') and ':' in emoji:
-        processed_emoji = emoji.split(':')[1] + ':' + emoji.split(':')[2].replace('>', '')
-    else:
-        processed_emoji = "".join(c for c in unicodedata.normalize("NFD", emoji) if unicodedata.category(c) != "Mn" and unicodedata.category(c) != "Me")
 
-    # 3. パネルの作成と投稿
-    embed = discord.Embed(
-        title=f"🎲 {diceroll.upper()} リアクションダイスパネル",
-        description=f"下の {emoji} でリアクションすると、**あなた専用**のダイスを振ることができます！",
-        color=discord.Color.gold()
-    )
-    # 💡 必要な情報をEmbedのフッターに隠して記憶させる（再起動対策）
-    embed.set_footer(text=f"DICEROLL:{diceroll.upper()}|EMOJI:{processed_emoji}")
+    guild = bot.get_guild(payload.guild_id)
+    if not guild: return
     
-    panel_message = await interaction.followup.send(embed=embed)
-    await panel_message.add_reaction(processed_emoji)
+    member = payload.member
+    if not member: return
+
+    channel = guild.get_channel(payload.channel_id)
+    if not channel: return
+    
+    try:
+        message = await channel.fetch_message(payload.message_id)
+        if message.author.id != bot.user.id or not message.embeds:
+            return
+    except discord.NotFound:
+        return
+
+    embed_title = message.embeds[0].title
+    
+    # --------------------------------------------------------------------
+    # 💡 仕分けロジック 1: 【リアクションロール】の処理
+    # --------------------------------------------------------------------
+    if embed_title == "【リアクションロール】":
+        # 💡 ロール付与の処理をここに移す（変更なし）
+        description = message.embeds[0].description
+        try:
+            import re
+            role_match = re.search(r'`@([^`]+)`', description)
+            if not role_match: return 
+            role_name = role_match.group(1) 
+        except Exception:
+            return 
+
+        role_to_add = discord.utils.get(guild.roles, name=role_name)
+        if role_to_add and member:
+            await member.add_roles(role_to_add)
+            print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
+            return # 役割が付与されたら、ここで処理を終了
+
+    # --------------------------------------------------------------------
+    # 💡 仕分けロジック 2: 【ダイスロール】の処理
+    # --------------------------------------------------------------------
+    # 💡 タイトルに「リアクションダイスパネル」という文言が含まれているかチェックするだけに簡略化
+    if "リアクションダイスパネル" in embed_title: 
+        
+        # 1. Embedのフッターから隠された情報（DICEROLLとEMOJI）を抽出
+        footer_text = message.embeds[0].footer.text
+        if footer_text and 'DICEROLL:' in footer_text:
+            try:
+                # 2. 情報を解析
+                diceroll_info = footer_text.split('|')[0].split(':')[1].strip()
+                emoji_info = footer_text.split('|')[1].split(':')[1].strip()
+                
+                # 3. 押された絵文字が、パネルの絵文字と一致するかチェック
+                if str(payload.emoji) == emoji_info:
+                    
+                    # 4. ダイスロールの実行
+                    num_dice, num_sides = map(int, diceroll_info.lower().split('d'))
+                    results = [random.randint(1, num_sides) for _ in range(num_dice)]
+                    total = sum(results)
+                    
+                    # 5. 結果を全員に見える形で投稿
+                    result_message = (
+                        f"🎲 **{payload.member.display_name}** が {diceroll_info} を振って: **{total}** を出しました！\n"
+                        f"内訳: `{results}`"
+                    )
+                    await channel.send(result_message)
+                    
+                    # 6. 究極のリアクション作法：Botがリアクションを消して、次のロールを促す
+                    await message.remove_reaction(payload.emoji, payload.member)
+                    
+            except Exception as e:
+                print(f"ダイスロールリアクションエラー: {e}")
+                pass
 
 # /helpコマンド：Botの機能一覧を表示
 @bot.tree.command(name="help", description="Botの全機能と使い方を表示します。")
@@ -809,6 +825,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
