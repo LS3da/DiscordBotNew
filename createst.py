@@ -331,7 +331,7 @@ async def reaction_slash(interaction: discord.Interaction, message: str, emoji: 
 
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-    # Bot自身のリアクションは無視する
+    # 1. 必須チェックとデータ取得（変更なし）
     if payload.user_id == bot.user.id:
         return
 
@@ -354,11 +354,13 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     embed_title = message.embeds[0].title
     
     # --------------------------------------------------------------------
-    # 💡 仕分けロジック 1: 【リアクションロール】の処理
+    # 💡 究極の排他制御：どちらかの処理に入ったら、もう一方の処理は無視する
     # --------------------------------------------------------------------
+    
+    # 1. 【リアクションロール】の処理
     if embed_title == "【リアクションロール】":
         
-        # ロール名抽出ロジック（変更なし）
+        # ロール名抽出ロジック（省略）
         try:
             import re
             description = message.embeds[0].description
@@ -370,23 +372,24 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 
         role_to_add = discord.utils.get(guild.roles, name=role_name)
         
-        # 💡 メンバーが既にロールを持っていない場合のみ付与 (二重付与対策)
+        # 💡 メンバーがまだロールを持っていない場合のみ付与 (二重付与対策)
         if role_to_add and member and role_to_add not in member.roles:
             
-            # メンバーにロールを付与！
             await member.add_roles(role_to_add)
             print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
 
-            # ❌ Botがリアクションを消す処理を、ここで完全に削除する！
-            # ユーザーがリアクションを残すことで、自発的にロールを外すことができるようにする。
-            
+            # 💡 処理は成功したが、リアクションは残す（これが作法！）
+
             return # 役割付与が完了したので、ここで処理を終了
 
-        # 💡 ロールを既に持っている場合も、何もしない（リアクションはそのまま残す）
-        #    Botは、ロール付与ができない時は、エラーを出さず、静かに処理を終了します。
-        
-        # 処理が不要な場合も、ここで終了させる
-        return
+        # 💡 ロールを既に持っている場合（二重リアクション）
+        elif role_to_add and member and role_to_add in member.roles:
+            try:
+                # ユーザーが再度リアクションを付けてきた場合、Botの権限でそれを消す
+                await message.remove_reaction(payload.emoji, payload.member)
+            except discord.Forbidden:
+                pass
+            return # 役割付与は不要だが、リアクション処理は終わったので、ここで終了
 
     # --------------------------------------------------------------------
     # 💡 仕分けロジック 2: 【ダイスロール】の処理
@@ -419,6 +422,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                     
                     # 6. 究極のリアクション作法：Botがリアクションを消して、次のロールを促す
                     await message.remove_reaction(payload.emoji, payload.member)
+                    return # ダイス処理が完了したので、ここで処理を終了
                     
             except Exception as e:
                 print(f"ダイスロールリアクションエラー: {e}")
@@ -785,6 +789,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
