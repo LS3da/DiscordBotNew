@@ -356,11 +356,15 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     # --------------------------------------------------------------------
     # 💡 仕分けロジック 1: 【リアクションロール】の処理
     # --------------------------------------------------------------------
+    # --------------------------------------------------------------------
+    # 💡 仕分けロジック 1: 【リアクションロール】の処理
+    # --------------------------------------------------------------------
     if embed_title == "【リアクションロール】":
-        # 💡 ロール付与の処理をここに移す（変更なし）
-        description = message.embeds[0].description
+        
+        # ロール名抽出ロジック（変更なし）
         try:
             import re
+            description = message.embeds[0].description
             role_match = re.search(r'`@([^`]+)`', description)
             if not role_match: return 
             role_name = role_match.group(1) 
@@ -368,10 +372,31 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             return 
 
         role_to_add = discord.utils.get(guild.roles, name=role_name)
-        if role_to_add and member:
+        
+        # 💡 メンバーが既にロールを持っているかチェック (二重付与対策)
+        if role_to_add and member and role_to_add not in member.roles:
+            
+            # メンバーにロールを付与！
             await member.add_roles(role_to_add)
             print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
-            return # 役割が付与されたら、ここで処理を終了
+            
+            # 💡 致命的な修正：二重付与/自己反応を防ぐため、ユーザーが付けたリアクションを削除
+            try:
+                # Botは自分のリアクションを消さないが、ユーザーのリアクションは消す
+                await message.remove_reaction(payload.emoji, payload.member)
+            except discord.Forbidden:
+                pass 
+                
+            return # 役割付与が完了したので、ここで処理を終了
+
+        # 💡 ロールを既に持っている場合も、リアクションは消してあげる（ただし、Botのリアクションはそのまま残る）
+        elif role_to_add and member and role_to_add in member.roles:
+            try:
+                # ユーザーが再度リアクションを付けてきた場合、リアクションだけ消してあげる
+                await message.remove_reaction(payload.emoji, payload.member)
+            except discord.Forbidden:
+                pass
+            return
 
     # --------------------------------------------------------------------
     # 💡 仕分けロジック 2: 【ダイスロール】の処理
@@ -408,35 +433,65 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             except Exception as e:
                 print(f"ダイスロールリアクションエラー: {e}")
                 pass
-
-# /callmesコマンド：通話への参加を促す（召集令状）
-@bot.tree.command(name="callmes", description="通話チャンネルへの参加を促します。")
-async def callmes_slash(interaction: discord.Interaction):
+                
+    # リアクションが「削除」されたことを監視するイベント
+    @bot.event
+    async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
+        
+        # 1. 必須チェックとデータ取得（このデータ取得は絶対に省略できません！）
+        if payload.user_id == bot.user.id:
+            return
     
-    # 1. Botの応答は、全員に見えるようにする
-    await interaction.response.defer(thinking=False, ephemeral=False)
+        guild = bot.get_guild(payload.guild_id)
+        if not guild: return
+        
+        # 💡 on_raw_reaction_remove では member の情報は不確実なので、get_memberで取得する
+        member = guild.get_member(payload.user_id) 
+        if not member: return # メンバーがサーバーにいない場合は処理を中断
     
-    # 2. コマンドを打ったユーザーの名前とメンションを取得
-    user_mention = interaction.user.mention
-    user_name = interaction.user.display_name
+        channel = guild.get_channel(payload.channel_id)
+        if not channel: return
+        
+        try:
+            # メッセージを取得（Botの投稿かチェック）
+            message = await channel.fetch_message(payload.message_id)
+            if message.author.id != bot.user.id or not message.embeds:
+                return
+        except discord.NotFound:
+            return
+
+        embed_title = message.embeds[0].title
+        
+        # --------------------------------------------------------------------
+        # 💡 仕分けロジック 1: 【リアクションロール】の処理
+        # --------------------------------------------------------------------
+        if embed_title == "【リアクションロール】":
+            
+            # ロール名抽出ロジック（変更なし）
+            try:
+                import re
+                description = message.embeds[0].description
+                role_match = re.search(r'`@([^`]+)`', description)
+                if not role_match: return 
+                role_name = role_match.group(1) 
+            except Exception:
+                return 
+
+            role_to_remove = discord.utils.get(guild.roles, name=role_name)
+            
+            if role_to_remove and member:
+                # 💡 メンバーからロールを剥奪！
+                await member.remove_roles(role_to_remove)
+                print(f"{member.display_name} から @{role_to_remove.name} を剥奪しました。")
+                return # 役割剥奪が完了したので、ここで処理を終了
+            
+        # --------------------------------------------------------------------
+        # 💡 仕分けロジック 2: 【ダイスロール】の処理
+        # --------------------------------------------------------------------
+        # ダイスパネルの場合、リアクションが外されたことは、無視する（処理不要）
+            if "リアクションダイスパネル" in embed_title: 
+            return
     
-    # 3. 召集令状のメッセージを構築
-    message = (
-        f"📣 **【通話参加者募集！】** 📣\n"
-        f"**{user_mention}** さんが、通話チャンネルであなたを待っています！\n"
-        f"みんなで一緒に話しませんか？\n\n"
-        f"（Botがこのメッセージを代理送信しています）"
-    )
-    
-    # 4. メッセージをチャンネルに送信
-    await interaction.followup.send(message)
-
-    # 5. 運営的なメッセージ（本人にだけ見えるように）
-    # 💡 最初に defer しているので、followup.send(ephemeral=True) を使う
-    # await interaction.followup.send("通話への参加を促すメッセージを送信しました。", ephemeral=True) 
-    # ↑今回は、メッセージが一つで済むように、deferのephemeralをFalseにしています。
-
-
 # /rollコマンド：ダイスロール機能
 @bot.tree.command(name="roll", description="ダイスを振ります (例: 1d100, 3d6)。")
 @app_commands.describe(diceroll="振りたいダイスの形式 (例: 1d100)")
@@ -718,6 +773,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
