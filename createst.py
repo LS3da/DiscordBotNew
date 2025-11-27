@@ -490,7 +490,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         # --------------------------------------------------------------------
         # ダイスパネルの場合、リアクションが外されたことは、無視する（処理不要）
             if "リアクションダイスパネル" in embed_title: 
-            return
+                return
     
 # /rollコマンド：ダイスロール機能
 @bot.tree.command(name="roll", description="ダイスを振ります (例: 1d100, 3d6)。")
@@ -773,6 +773,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
