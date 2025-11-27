@@ -329,223 +329,6 @@ async def reaction_slash(interaction: discord.Interaction, message: str, emoji: 
     # 5. Botによるリアクション (無害化された絵文字を使う！)
     await panel_message.add_reaction(processed_emoji)
 
-# リアクションが「追加」されたことを監視するイベント
-@bot.event
-async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-    # Bot自身のリアクションは無視する
-    if payload.user_id == bot.user.id:
-        return
-
-    # どのサーバー(guild)で、どのチャンネル(channel)で、どのメッセージ(message)かを取得
-    guild = bot.get_guild(payload.guild_id)
-    if not guild: return
-    
-    channel = guild.get_channel(payload.channel_id)
-    if not channel: return
-    
-    try:
-        message = await channel.fetch_message(payload.message_id)
-    except discord.NotFound:
-        return # メッセージが見つからない場合は処理を中断
-    
-    # リアクションされたメッセージがBotの投稿で、かつEmbed形式(パネル)でなければ無視
-    if message.author.id != bot.user.id or not message.embeds:
-        return
-        
-    # Embedのタイトルが「【リアクションロール】」でなければ無視
-    if message.embeds[0].title != "【リアクションロール】":
-        return
-
-    # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 究極の解析ロジックに変更 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-    # ロール名（`@...`で囲まれた部分）を正規表現で確実に抽出する
-    description = message.embeds[0].description
-    try:
-        role_match = re.search(r'`@([^`]+)`', description)
-        
-        if not role_match:
-            return # ロール名が見つからない場合は無視（解析失敗）
-            
-        role_name = role_match.group(1) # 抽出したロール名
-    
-    except Exception:
-        return # その他のエラーで解析失敗の場合は無視
-    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-    # 押されたリアクションが、Botが設定した絵文字と一致するか確認
-    # (ここでは、どんな絵文字が押されても、Botが最初に付けた絵文字と一致するかどうかは判断しない)
-    # 💡 どの絵文字が押されたかに関わらず、ロール付与の処理を継続する
-    
-    role_to_add = discord.utils.get(guild.roles, name=role_name)
-    member = guild.get_member(payload.user_id)
-    
-    if role_to_add and member:
-        # メンバーにロールを付与！
-        await member.add_roles(role_to_add)
-        print(f"{member.display_name} に @{role_to_add.name} を付与しました。")
-        return
-
-    if message.author.id == bot.user.id and message.embeds and message.embeds[0].title.endswith("リアクションダイスパネル"):
-        # 1. Embedのフッターから隠された情報（DICEROLLとEMOJI）を抽出
-        footer_text = message.embeds[0].footer.text
-        if footer_text and 'DICEROLL:' in footer_text:
-            try:
-                # 2. 情報を解析
-                diceroll_info = footer_text.split('|')[0].split(':')[1].strip()
-                emoji_info = footer_text.split('|')[1].split(':')[1].strip()
-                
-                # 3. 押された絵文字が、パネルの絵文字と一致するかチェック
-                if str(payload.emoji) == emoji_info:
-                    
-                    # 4. ダイスロールの実行
-                    num_dice, num_sides = map(int, diceroll_info.lower().split('d'))
-                    results = [random.randint(1, num_sides) for _ in range(num_dice)]
-                    total = sum(results)
-                    
-                    # 5. 結果を全員に見える形で投稿
-                    result_message = (
-                        f"**{payload.member.display_name}** が {diceroll_info} を振って: **{total}** を出しました！\n"
-                        f"内訳: `{results}`"
-                    )
-                    await channel.send(result_message)
-                    
-                    # 6. 究極のリアクション作法：Botがリアクションを消して、次のロールを促す
-                    await message.remove_reaction(payload.emoji, payload.member)
-                    
-            except Exception as e:
-                print(f"ダイスロールリアクションエラー: {e}")
-                pass # エラーが出てもBotは止まらない
-
-# リアクションが「削除」されたことを監視するイベント
-@bot.event
-async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
-    # Bot自身のリアクションは無視する
-    if payload.user_id == bot.user.id:
-        return
-
-    # どのサーバー(guild)で、どのチャンネル(channel)で、どのメッセージ(message)かを取得
-    guild = bot.get_guild(payload.guild_id)
-    if not guild: return
-    
-    channel = guild.get_channel(payload.channel_id)
-    if not channel: return
-    
-    try:
-        message = await channel.fetch_message(payload.message_id)
-    except discord.NotFound:
-        return # メッセージが見つからない場合は処理を中断
-    
-    # リアクションされたメッセージがBotの投稿で、かつEmbed形式(パネル)でなければ無視
-    if message.author.id != bot.user.id or not message.embeds:
-        return
-        
-    # Embedのタイトルが「【リアクションロール】」でなければ無視
-    if message.embeds[0].title != "【リアクションロール】":
-        return
-
-    # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 究極の解析ロジックに変更 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-    # ロール名（`@...`で囲まれた部分）を正規表現で確実に抽出する
-    description = message.embeds[0].description
-    try:
-        role_match = re.search(r'`@([^`]+)`', description)
-        
-        if not role_match:
-            return # ロール名が見つからない場合は無視（解析失敗）
-            
-        role_name = role_match.group(1) # 抽出したロール名
-    
-    except Exception:
-        return # その他のエラーで解析失敗の場合は無視
-    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-    # 押されたリアクションが、Botが設定した絵文字と一致するか確認
-    # 💡 どの絵文字が押されたかに関わらず、ロール剥奪の処理を継続する
-    
-    role_to_remove = discord.utils.get(guild.roles, name=role_name)
-    member = guild.get_member(payload.user_id)
-
-    if message.author.id == bot.user.id and message.embeds and message.embeds[0].title.endswith("リアクションダイスパネル"):
-        # ダイスパネルの場合、リアクションが外されたことは無視し、
-        # 処理をon_raw_reaction_addに一本化するため、ここでは何もしません。
-        # on_raw_reaction_remove はロール処理に専念させます。
-        pass
-    
-    if role_to_remove and member:
-        # メンバーからロールを剥奪！
-        await member.remove_roles(role_to_remove)
-        print(f"{member.display_name} から @{role_to_remove.name} を剥奪しました。")
-
-# /callmesコマンド：通話への参加を促す（召集令状）
-@bot.tree.command(name="callmes", description="通話チャンネルへの参加を促します。")
-async def callmes_slash(interaction: discord.Interaction):
-    
-    # 1. Botの応答は、全員に見えるようにする
-    await interaction.response.defer(thinking=False, ephemeral=False)
-    
-    # 2. コマンドを打ったユーザーの名前とメンションを取得
-    user_mention = interaction.user.mention
-    user_name = interaction.user.display_name
-    
-    # 3. 召集令状のメッセージを構築
-    message = (
-        f"📣 **【通話参加者募集！】** 📣\n"
-        f"**{user_mention}** さんが、通話チャンネルであなたを待っています！\n"
-        f"みんなで一緒に話しませんか？\n\n"
-        f"（Botがこのメッセージを代理送信しています）"
-    )
-    
-    # 4. メッセージをチャンネルに送信
-    await interaction.followup.send(message)
-
-    # 5. 運営的なメッセージ（本人にだけ見えるように）
-    # 💡 最初に defer しているので、followup.send(ephemeral=True) を使う
-    # await interaction.followup.send("通話への参加を促すメッセージを送信しました。", ephemeral=True) 
-    # ↑今回は、メッセージが一つで済むように、deferのephemeralをFalseにしています。
-
-
-# /rollコマンド：ダイスロール機能
-@bot.tree.command(name="roll", description="ダイスを振ります (例: 1d100, 3d6)。")
-@app_commands.describe(diceroll="振りたいダイスの形式 (例: 1d100)")
-async def roll_slash(interaction: discord.Interaction, diceroll: str):
-    
-    # 応答をdeferし、結果が出るまで待たせる
-    await interaction.response.defer(thinking=True, ephemeral=False)
-    
-    try:
-        # 1. 入力チェックと解析 (例: 1d100 -> [1, 100])
-        if 'd' not in diceroll.lower():
-            await interaction.followup.send("ごめんなさい、入力形式が正しくありません。例: `1d100`", ephemeral=True)
-            return
-
-        num_dice, num_sides = map(int, diceroll.lower().split('d'))
-        
-        if num_dice <= 0 or num_sides <= 1:
-             await interaction.followup.send("ダイス数と面数は、1以上の整数である必要があります。", ephemeral=True)
-             return
-             
-        if num_dice > 20 or num_sides > 1000:
-            await interaction.followup.send("ダイスは最大20個、面数は最大1000までに制限しています。", ephemeral=True)
-            return
-
-        # 2. ダイスを振る
-        results = [random.randint(1, num_sides) for _ in range(num_dice)]
-        total = sum(results)
-        
-        # 3. 結果の表示
-        message = (
-            f"🎲 **{interaction.user.display_name} さんのダイスロール結果！**\n"
-            f"**{diceroll.upper()}** の合計: **{total}**\n"
-            f"内訳: `{results}`"
-        )
-        
-        await interaction.followup.send(message)
-        
-    except ValueError:
-        await interaction.followup.send("入力が整数ではありません。例: `1d6`", ephemeral=True)
-    except Exception as e:
-        print(f"Rollコマンドエラー: {e}")
-        await interaction.followup.send("ダイスロール中に予期せぬエラーが発生しました。", ephemeral=True)
-
-# リアクションが「追加」されたことを監視するイベント
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     # Bot自身のリアクションは無視する
@@ -625,6 +408,116 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             except Exception as e:
                 print(f"ダイスロールリアクションエラー: {e}")
                 pass
+
+# /callmesコマンド：通話への参加を促す（召集令状）
+@bot.tree.command(name="callmes", description="通話チャンネルへの参加を促します。")
+async def callmes_slash(interaction: discord.Interaction):
+    
+    # 1. Botの応答は、全員に見えるようにする
+    await interaction.response.defer(thinking=False, ephemeral=False)
+    
+    # 2. コマンドを打ったユーザーの名前とメンションを取得
+    user_mention = interaction.user.mention
+    user_name = interaction.user.display_name
+    
+    # 3. 召集令状のメッセージを構築
+    message = (
+        f"📣 **【通話参加者募集！】** 📣\n"
+        f"**{user_mention}** さんが、通話チャンネルであなたを待っています！\n"
+        f"みんなで一緒に話しませんか？\n\n"
+        f"（Botがこのメッセージを代理送信しています）"
+    )
+    
+    # 4. メッセージをチャンネルに送信
+    await interaction.followup.send(message)
+
+    # 5. 運営的なメッセージ（本人にだけ見えるように）
+    # 💡 最初に defer しているので、followup.send(ephemeral=True) を使う
+    # await interaction.followup.send("通話への参加を促すメッセージを送信しました。", ephemeral=True) 
+    # ↑今回は、メッセージが一つで済むように、deferのephemeralをFalseにしています。
+
+
+# /rollコマンド：ダイスロール機能
+@bot.tree.command(name="roll", description="ダイスを振ります (例: 1d100, 3d6)。")
+@app_commands.describe(diceroll="振りたいダイスの形式 (例: 1d100)")
+async def roll_slash(interaction: discord.Interaction, diceroll: str):
+    
+    # 応答をdeferし、結果が出るまで待たせる
+    await interaction.response.defer(thinking=True, ephemeral=False)
+    
+    try:
+        # 1. 入力チェックと解析 (例: 1d100 -> [1, 100])
+        if 'd' not in diceroll.lower():
+            await interaction.followup.send("ごめんなさい、入力形式が正しくありません。例: `1d100`", ephemeral=True)
+            return
+
+        num_dice, num_sides = map(int, diceroll.lower().split('d'))
+        
+        if num_dice <= 0 or num_sides <= 1:
+             await interaction.followup.send("ダイス数と面数は、1以上の整数である必要があります。", ephemeral=True)
+             return
+             
+        if num_dice > 20 or num_sides > 1000:
+            await interaction.followup.send("ダイスは最大20個、面数は最大1000までに制限しています。", ephemeral=True)
+            return
+
+        # 2. ダイスを振る
+        results = [random.randint(1, num_sides) for _ in range(num_dice)]
+        total = sum(results)
+        
+        # 3. 結果の表示
+        message = (
+            f"🎲 **{interaction.user.display_name} さんのダイスロール結果！**\n"
+            f"**{diceroll.upper()}** の合計: **{total}**\n"
+            f"内訳: `{results}`"
+        )
+        
+        await interaction.followup.send(message)
+        
+    except ValueError:
+        await interaction.followup.send("入力が整数ではありません。例: `1d6`", ephemeral=True)
+    except Exception as e:
+        print(f"Rollコマンドエラー: {e}")
+        await interaction.followup.send("ダイスロール中に予期せぬエラーが発生しました。", ephemeral=True)
+
+# /buttonrollコマンド：ボタン付きダイスロール機能
+@bot.tree.command(name="reactionroll", description="リアクションを押すたびにダイスを振ります (例: 1d100)。")
+@app_commands.describe(diceroll="振りたいダイスの形式 (例: 1d100)", emoji="使用する絵文字 (例: 🎲, 🎯)")
+async def reactionroll_slash(interaction: discord.Interaction, diceroll: str, emoji: str = "🎲"):
+    
+    await interaction.response.defer(thinking=False, ephemeral=False)
+    
+    # 1. 入力チェック (roll_slashのロジックをそのまま使用)
+    if 'd' not in diceroll.lower():
+        await interaction.followup.send("ごめんなさい、入力形式が正しくありません。例: `1d100`", ephemeral=True)
+        return
+        
+    try:
+        num_dice, num_sides = map(int, diceroll.lower().split('d'))
+        if num_dice <= 0 or num_sides <= 1 or num_dice > 20 or num_sides > 1000:
+             await interaction.followup.send("ダイス数/面数を確認してください。", ephemeral=True)
+             return
+    except ValueError:
+        await interaction.followup.send("入力が整数ではありません。例: `1d6`", ephemeral=True)
+        return
+        
+    # 2. 絵文字の無害化（Botがリアクションを付けられるように）
+    if emoji.startswith('<') and emoji.endswith('>') and ':' in emoji:
+        processed_emoji = emoji.split(':')[1] + ':' + emoji.split(':')[2].replace('>', '')
+    else:
+        processed_emoji = "".join(c for c in unicodedata.normalize("NFD", emoji) if unicodedata.category(c) != "Mn" and unicodedata.category(c) != "Me")
+
+    # 3. パネルの作成と投稿
+    embed = discord.Embed(
+        title=f"🎲 {diceroll.upper()} リアクションダイスパネル",
+        description=f"下の {emoji} でリアクションすると、**あなた専用**のダイスを振ることができます！",
+        color=discord.Color.gold()
+    )
+    # 💡 必要な情報をEmbedのフッターに隠して記憶させる（再起動対策）
+    embed.set_footer(text=f"DICEROLL:{diceroll.upper()}|EMOJI:{processed_emoji}")
+    
+    panel_message = await interaction.followup.send(embed=embed)
+    await panel_message.add_reaction(processed_emoji)
 
 # /helpコマンド：Botの機能一覧を表示
 @bot.tree.command(name="help", description="Botの全機能と使い方を表示します。")
@@ -825,6 +718,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
