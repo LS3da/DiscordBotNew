@@ -427,7 +427,69 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             except Exception as e:
                 print(f"ダイスロールリアクションエラー: {e}")
                 pass
+
+    # --------------------------------------------------------------------
+    # 💡 仕分けロジック 3: 【チケットパネル】の処理
+    # --------------------------------------------------------------------
+    elif embed_title.startswith("✉️ サポートチケットの作成"):
+        
+        # 1. Embedのフッターから隠された情報（EMOJI）を抽出
+        footer_text = message.embeds[0].footer.text
+        if footer_text and 'TICKET_PANEL' in footer_text:
+            try:
+                ticket_emoji = footer_text.split('|')[1].split(':')[1].strip()
+            except Exception:
+                return 
                 
+            # 2. 押された絵文字が、パネルの絵文字と一致するかチェック
+            if str(payload.emoji) == ticket_emoji:
+                
+                # 3. チャンネル名の設定
+                channel_name = f"ticket-{member.name}-{member.discriminator}"
+                
+                # 4. チャンネルを作成するカテゴリを特定（なければ無視）
+                # 💡 このBotが作成したチャンネルをまとめるカテゴリIDがあれば、ここに設定する
+                # category_id = 123456789012345678 
+                category = None # Botは、カテゴリIDがない場合、サーバーのトップに作成します
+    
+                # 5. チャンネルの権限を設定
+                # 💡 AdminロールのIDを特定（ロール名を指定して取得するのが確実）
+                admin_role = discord.utils.get(guild.roles, name="CreatestAdmin") 
+                if not admin_role: admin_role = discord.utils.get(guild.roles, name="Admin") # もしBotの管理者ロールがなければ、一般的なAdminを試す
+    
+                # 6. チャンネルを作成！
+                overwrites = {
+                    guild.default_role: discord.PermissionOverwrite(read_messages=False), # @everyoneは閲覧禁止
+                    member: discord.PermissionOverwrite(read_messages=True, send_messages=True), # 相談者はOK
+                    guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True), # BotはOK
+                    admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True) # 管理者はOK
+                }
+            
+                new_channel = await guild.create_text_channel(
+                    channel_name, 
+                    overwrites=overwrites, 
+                    category=category,
+                    topic=f"ユーザーID: {member.id} のサポートチケットです。相談内容: {message.embeds[0].fields[0].value}"
+                )
+                
+                # 7. チャンネル内に最初のメッセージを投稿
+                await new_channel.send(
+                    f"{member.mention} {admin_role.mention} さん、サポートチャンネルがオープンしました！\n"
+                    f"Botは管理者 {admin_role.name} の方々と、あなた（{member.display_name}）だけが、ここを見ることができます。\n"
+                    f"チケットを開いてくれてありがとうございます。管理者からの応答をお待ちください。"
+                )
+                
+                # 8. Botがリアクションを消して、次のチケットを促す
+                await message.remove_reaction(payload.emoji, member)
+                return # 処理が完了したので、ここで終了
+        
+            except Exception as e:
+                print(f"チケット作成エラー: {e}")
+                # エラーの場合は、元のメッセージに管理者向けのエラーを追記し、元のリアクションは消さない
+                original_embed = message.embeds[0]
+                original_embed.add_field(name="エラー発生", value="チャンネル作成に失敗しました。", inline=False)
+                await message.edit(embed=original_embed)
+            
 # リアクションが「削除」されたことを監視するイベント
 @bot.event
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
@@ -486,6 +548,7 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     if "リアクションダイスパネル" in embed_title: 
         # ダイスパネルの場合、リアクションが外されたことは、無視する（処理不要）
         return
+    
 
 # /callmesコマンド：通話への参加を促す（召集令状）
 @bot.tree.command(name="callmes", description="通話チャンネルへの参加を促します。")
@@ -590,6 +653,31 @@ async def reactionroll_slash(interaction: discord.Interaction, diceroll: str, em
     
     panel_message = await interaction.followup.send(embed=embed)
     await panel_message.add_reaction(processed_emoji)
+
+# /ticketコマンド：チケットパネルを作成
+@bot.tree.command(name="ticket", description="プライベートなサポートチャンネルを作成するためのパネルを投稿します。")
+@app_commands.describe(content="相談したい内容の要約を記入してください。")
+async def ticket_slash(interaction: discord.Interaction, content: str):
+    
+    await interaction.response.defer(thinking=False, ephemeral=False)
+    
+    # 1. パネルの作成
+    ticket_emoji = "✉️" # チケットに使用する絵文字を固定
+    
+    embed = discord.Embed(
+        title="✉️ サポートチケットの作成",
+        description=f"下の {ticket_emoji} でリアクションすると、**あなたと管理者だけ**が見えるプライベートなチャンネルが作成されます。",
+        color=discord.Color.red()
+    )
+    embed.add_field(name="相談内容", value=content, inline=False)
+    
+    # 💡 必要な情報をフッターに隠して記憶させる（再起動対策）
+    # チケットの識別に使う情報はないため、EMOJIだけを隠します。
+    embed.set_footer(text=f"TICKET_PANEL|EMOJI:{ticket_emoji}")
+    
+    # 2. メッセージ投稿とBotのリアクション
+    panel_message = await interaction.followup.send(embed=embed)
+    await panel_message.add_reaction(ticket_emoji)
 
 # /helpコマンド：Botの機能一覧を表示
 @bot.tree.command(name="help", description="Botの全機能と使い方を表示します。")
@@ -790,6 +878,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
