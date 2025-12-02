@@ -433,61 +433,59 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     # --------------------------------------------------------------------
     elif embed_title.startswith("✉️ サポートチケットの作成"):
         
-        # 1. Embedのフッターから隠された情報（EMOJI）を抽出
-        footer_text = message.embeds[0].footer.text
-        
-        # 💡 ここで、すべての処理を try ブロックで囲み、構造的なエラーを解消する
+        # 💡 ここで、すぐに try ブロックを開始し、全ての処理を囲む
         try:
-            if footer_text and 'TICKET_PANEL' in footer_text:
-                
-                # 2. 情報を抽出
-                ticket_emoji = footer_text.split('|')[1].split(':')[1].strip()
-                
-                # 3. 押された絵文字が、パネルの絵文字と一致するかチェック
-                if str(payload.emoji) == ticket_emoji:
-                    
-                    # 4. チャンネル名の設定
-                    channel_name = f"ticket-{member.name}-{member.discriminator}"
-                    
-                    # 5. チャンネルを作成するカテゴリを特定（なければ無視）
-                    category = None 
-        
-                    # 6. チャンネルの権限を設定
-                    admin_role = discord.utils.get(guild.roles, name="CreatestAdmin") 
-                    if not admin_role: admin_role = discord.utils.get(guild.roles, name="Admin") 
-        
-                    # 7. チャンネルを作成！
-                    overwrites = {
-                        guild.default_role: discord.PermissionOverwrite(read_messages=False), 
-                        member: discord.PermissionOverwrite(read_messages=True, send_messages=True), 
-                        guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True), 
-                        admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True) 
-                    }
-                
-                    new_channel = await guild.create_text_channel(
-                        channel_name, 
-                        overwrites=overwrites, 
-                        topic=f"ユーザーID: {member.id} のサポートチケットです。相談内容: {message.embeds[0].fields[0].value}"
-                    )
-                    
-                    # 8. チャンネル内に最初のメッセージを投稿
-                    await new_channel.send(
-                        f"{member.mention} {admin_role.mention} さん、サポートチャンネルがオープンしました！\n"
-                        f"Botは管理者 {admin_role.name} の方々と、あなた（{member.display_name}）だけが、ここを見ることができます。\n"
-                        f"チケットを開いてくれてありがとうございます。管理者からの応答をお待ちください。"
-                    )
-                    
-                    # 9. Botがリアクションを消して、次のチケットを促す
-                    await message.remove_reaction(payload.emoji, member)
-                    return # 処理が完了したので、ここで終了
+            # 1. Embedのフッターから隠された情報（EMOJI）を抽出
+            footer_text = message.embeds[0].footer.text
+            if not footer_text or 'TICKET_PANEL' not in footer_text:
+                return # 形式が違う場合は即座に終了
+
+            # 2. 情報を抽出
+            ticket_emoji = footer_text.split('|')[1].split(':')[1].strip()
             
-            # 💡 処理が失敗した場合の except ブロック
-            except Exception as e:
-                print(f"チケット作成エラー: {e}")
-                # エラーの場合は、元のメッセージに管理者向けのエラーを追記し、元のリアクションは消さない
-                original_embed = message.embeds[0]
-                original_embed.add_field(name="エラー発生", value="チャンネル作成に失敗しました。（管理者向けのログを確認してください）", inline=False)
-                await message.edit(embed=original_embed)
+            # 3. 押された絵文字が、パネルの絵文字と一致するかチェック
+            if str(payload.emoji) != ticket_emoji:
+                return # 絵文字が違えば即座に終了
+
+            # 4. チャンネル名の設定
+            channel_name = f"ticket-{member.name}-{member.discriminator}"
+            
+            # 5. チャンネルの権限を設定
+            admin_role = discord.utils.get(guild.roles, name="CreatestAdmin") 
+            if not admin_role: admin_role = discord.utils.get(guild.roles, name="Admin") 
+
+            # 6. チャンネルを作成！
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False), 
+                member: discord.PermissionOverwrite(read_messages=True, send_messages=True), 
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True), 
+                admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True) 
+            }
+        
+            new_channel = await guild.create_text_channel(
+                channel_name, 
+                overwrites=overwrites, 
+                topic=f"ユーザーID: {member.id} のサポートチケットです。相談内容: {message.embeds[0].fields[0].value}"
+            )
+            
+            # 7. チャンネル内に最初のメッセージを投稿
+            await new_channel.send(
+                f"{member.mention} {admin_role.mention} さん、サポートチャンネルがオープンしました！\n"
+                f"Botは管理者 {admin_role.name} の方々と、あなた（{member.display_name}）だけが、ここを見ることができます。\n"
+                f"チケットを開いてくれてありがとうございます。管理者からの応答をお待ちください。"
+            )
+            
+            # 8. Botがリアクションを消して、次のチケットを促す
+            await message.remove_reaction(payload.emoji, member)
+            return # 処理が完了したので、ここで終了
+    
+        # ❌ except が try とペアを組む
+        except Exception as e:
+            print(f"チケット作成エラー: {e}")
+            # エラーの場合は、元のメッセージに管理者向けのエラーを追記し、元のリアクションは消さない
+            original_embed = message.embeds[0]
+            original_embed.add_field(name="エラー発生", value="チャンネル作成に失敗しました。（管理者向けのログを確認してください）", inline=False)
+            await message.edit(embed=original_embed)
             
 # リアクションが「削除」されたことを監視するイベント
 @bot.event
@@ -877,6 +875,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
