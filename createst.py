@@ -24,7 +24,7 @@ if GEMINI_API_KEY:
         genai.configure(api_key=GEMINI_API_KEY)
 
         # 1. 安定版
-        gemini_model = genai.GenerativeModel('gemini-flash-latest')
+        gemini_model = genai.GenerativeModel('gemini-3-flash-preview')
         print("Gemini モデルの準備に成功しました。")
         GEMINI_READY = True
 
@@ -875,6 +875,7 @@ async def on_message(message):
 
 # Botの起動
 bot.run(os.environ['DISCORD_BOT_TOKEN'])
+
 
 
 
